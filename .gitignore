@@ -1,0 +1,9 @@
+.python-version
+*.pyc
+__pycache__
+data/dataset
+result/*
+!result/generated_samples/
+!result/trained_models/
+deploy.sh
+notify_slack.py
