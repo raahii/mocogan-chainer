@@ -1,5 +1,6 @@
 import argparse
 import os, sys
+from pytz import timezone
 from datetime import datetime
 
 import chainer
@@ -14,7 +15,6 @@ from model.net import ImageDiscriminator
 from model.net import VideoDiscriminator
 from model.updater import Updater
 from visualize import save_video_samples
-
 
 sys.path.append(os.path.dirname(__file__))
 
@@ -54,7 +54,7 @@ def main():
     generate_num = min(args.num_gen_samples, len(train_dataset))
     seed = 3
     ext = 'gif'
-    now = datetime.now().strftime("%Y_%m%d_%H%M")
+    now = datetime.now(timezone('Asia/Tokyo')).strftime("%Y_%m%d_%H%M")
     save_path = 'result/' + now + '/'
 
     # Set up models

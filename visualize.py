@@ -16,7 +16,7 @@ def write_video(x, filepath, ext, fps=25.0):
     
     imgs = []
     fig = plt.figure()
-    x = x.transpose(1,3,2,0) / 2. + 0.5
+    x = chainer.cuda.to_cpu(x).transpose(1,3,2,0) / 2. + 0.5
     for i in range(frames):
         img = plt.imshow(x[i], animated=True)
         imgs.append([img])

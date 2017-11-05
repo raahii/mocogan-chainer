@@ -35,7 +35,7 @@ class Updater(chainer.training.StandardUpdater):
         image_dis_optimizer = self.get_optimizer('image_dis')
         video_dis_optimizer = self.get_optimizer('video_dis')
 
-        gru, gen     = self.gru, self.gen
+        gru, gen = self.gru, self.gen
         image_dis, video_dis = self.image_dis, self.video_dis
         
         batch = self.get_iterator('main').next()
@@ -44,21 +44,29 @@ class Updater(chainer.training.StandardUpdater):
         ## real data
         x_real = Variable(self.converter(batch, self.device) / 255.)
         xp = chainer.cuda.get_array_module(x_real.data)
+
         y_real_i = image_dis(x_real[:,:,xp.random.randint(0, self.T)])
         y_real_v = video_dis(x_real)
 
         ## fake data
-        zc = Variable(self.converter(gru.make_zc(batchsize), self.device))
-        h0 = Variable(self.converter(gru.make_h0(batchsize), self.device))
+        zc = Variable(xp.asarray(gru.make_zc(batchsize)))
+        h0 = Variable(xp.asarray(gru.make_h0(batchsize)))
         
-        x_fake = xp.empty((self.T, batchsize, 3, self.img_size, self.img_size), dtype=xp.float32)
+        # x_fake = xp.empty((self.T, batchsize, 3, self.img_size, self.img_size), dtype=xp.float32)
+        x_fake = Variable()
         for i in range(self.T):
             e = Variable(xp.asarray(gru.make_zm(batchsize)))
             zm = gru(h0, e)
-            z = xp.concatenate((zc.data, zm.data), axis=1)
-            z = z[:, :, xp.newaxis, xp.newaxis]
-            
-            x_fake[i] = gen(z).data
+            z = F.concat([zc, zm], axis=1)
+
+            bs, zd = z.shape
+            z = F.reshape(z, (bs, zd, 1, 1))
+            frame = F.reshape(gen(z), (1, batchsize, 3, self.img_size, self.img_size))
+
+            if x_fake.data is None:
+                x_fake = frame
+            else:
+                x_fake = F.concat([x_fake, frame], axis=0)
         
         x_fake = x_fake.transpose(1, 2, 0, 3, 4)
         y_fake_i = image_dis(x_fake[:,:,xp.random.randint(0, self.T)])
