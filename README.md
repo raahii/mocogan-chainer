@@ -1,7 +1,7 @@
 # mocogan-chainer
 
-[![license](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/piyo56/3dgan-chainer/blob/master/LICENSE)
-[![arXiv Tag](https://img.shields.io/badge/arXiv-1610.07584-brightgreen.svg)](https://arxiv.org/abs/1610.07584)
+[![license](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/piyo56/mocogan-chainer/blob/master/LICENSE)
+[![arXiv Tag](https://img.shields.io/badge/arXiv-1610.07584-brightgreen.svg)](https://arxiv.org/abs/1707.04993)
 
 
 ## Chainer implementation of MoCoGAN
