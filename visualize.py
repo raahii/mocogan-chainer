@@ -36,11 +36,14 @@ def save_video_samples(gru, gen, num, T, seed, save_path, ext):
         xp = chainer.cuda.get_array_module(zc.data)
 
         videos = xp.empty((T, num, 3, 96, 96), dtype=xp.float32)
+        h0 = Variable(xp.asarray(gru.make_h0(num)))
         with chainer.using_config('train', False):
             for i in range(T):
-                eps = Variable(xp.asarray(gru.make_zm(num)))
-                zm = gru(eps)
+                e = Variable(xp.asarray(gru.make_zm(num)))
+                zm = gru(h0, e)
                 z = xp.concatenate((zc.data, zm.data), axis=1)
+                z = z[:, :, xp.newaxis, xp.newaxis]
+
                 videos[i] = gen(z).data
         
         videos = videos.transpose(1, 2, 0, 3, 4)

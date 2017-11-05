@@ -9,31 +9,20 @@
 This repository contains an chainer implementation of MoCoGAN: Decomposing Motion and Content for Video Generation by Sergey Tulyakov, Ming-Yu Liu, Xiaodong Yang, Jan Kautz.
 
 ### Result
-Only MUG Facial Expression Database
-Some **good** samples generated chairs. (50epoch)
+Some **good** samples generated videos.
 
-<img width='33%' src='result/generated_samples/png/7.png'><img width='33%' src='result/generated_samples/png/13.png'><img width='33%' src='result/generated_samples/png/17.png'>
-<img width='33%' src='result/generated_samples/png/21.png'><img width='33%' src='result/generated_samples/png/30.png'><img width='33%' src='result/generated_samples/png/31.png'>
-<img width='33%' src='result/generated_samples/png/40.png'><img width='33%' src='result/generated_samples/png/97.png'>
+<!-- <img width='33%' src='result/generated_samples/png/7.png'><img width='33%' src='result/generated_samples/png/13.png'><img width='33%' src='result/generated_samples/png/17.png'> -->
+<!-- <img width='33%' src='result/generated_samples/png/21.png'><img width='33%' src='result/generated_samples/png/30.png'><img width='33%' src='result/generated_samples/png/31.png'> -->
+<!-- <img width='33%' src='result/generated_samples/png/40.png'><img width='33%' src='result/generated_samples/png/97.png'> -->
 
-```
-python generate_samples.py result/trained_models/Generator_50epoch.npz <save direcotry> <num to be generated>
-```
+<!-- ``` -->
+<!-- python generate_samples.py result/trained_models/Generator_50epoch.npz <save direcotry> <num to be generated> -->
+<!-- ``` -->
 
 ### Requirements
 
 - chainer(2.0.1)
-- scipy
-- scikit-image
-- h5py
-
-```
-pip install scipy scikit-image h5py
-```
-
-#### Optional
-
-`opencv` is required for preprocessing for dataset.
+- opencv
 
 ### Dataset
 

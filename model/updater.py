@@ -49,16 +49,17 @@ class Updater(chainer.training.StandardUpdater):
 
         ## fake data
         zc = Variable(self.converter(gru.make_zc(batchsize), self.device))
+        h0 = Variable(self.converter(gru.make_h0(batchsize), self.device))
         
         x_fake = xp.empty((self.T, batchsize, 3, self.img_size, self.img_size), dtype=xp.float32)
         for i in range(self.T):
-        # for i in range(2):
-            eps = Variable(self.converter(gru.make_zm(batchsize), self.device))
-            zm = gru(eps).reshape(batchsize, gru.n_zm, 1, 1)
+            e = Variable(xp.asarray(gru.make_zm(batchsize)))
+            zm = gru(h0, e)
             z = xp.concatenate((zc.data, zm.data), axis=1)
+            z = z[:, :, xp.newaxis, xp.newaxis]
             
             x_fake[i] = gen(z).data
-
+        
         x_fake = x_fake.transpose(1, 2, 0, 3, 4)
         y_fake_i = image_dis(x_fake[:,:,xp.random.randint(0, self.T)])
         y_fake_v = video_dis(x_fake)

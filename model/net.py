@@ -92,26 +92,29 @@ class Generator(chainer.Chain):
         return x
 
 class GRU(chainer.Chain):
-    def __init__(self, n_zc=50, n_zm=10):
+    def __init__(self, T=16, n_zc=50, n_zm=10):
         super(GRU, self).__init__()
-
+        
+        self.T = T
         self.n_zc = n_zc
         self.n_zm = n_zm
 
         with self.init_scope():
-            self.g1 = L.GRU(self.n_zm, self.n_zm)
+            self.g1 = L.StatelessGRU(self.n_zm, self.n_zm, 0.2)
 
-    def __call__(self, eps):
-        z = self.g1(eps)
+    def __call__(self, h0, e):
+        z = self.g1(h0, e)
 
-        bs, c = z.shape
-        return z.reshape(bs, c, 1, 1)
+        return z
 
     def make_zc(self, batchsize):
-        return np.random.normal(0, 0.33, size=[batchsize, self.n_zc, 1, 1]).astype(np.float32)
+        return np.random.normal(0, 0.33, size=[batchsize, self.n_zc]).astype(np.float32)
+
+    def make_h0(self, batchsize):
+        return np.random.normal(0, 0.33, size=[batchsize, self.n_zm]).astype(np.float32)
 
     def make_zm(self, batchsize):
-        return np.random.normal(0, 0.33, size=[batchsize, self.n_zm, 1, 1]).astype(np.float32)
+        return np.random.normal(0, 0.33, size=[batchsize, self.n_zm]).astype(np.float32)
 
 def count_model_params(m):
     return sum(p.data.size for p in m.params())
