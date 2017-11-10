@@ -32,22 +32,15 @@ class VideoDataset(chainer.dataset.DatasetMixin):
         frame_paths = np.asarray(glob.glob(os.path.join(self.video_paths[i], '*.jpg')))
 
         # videos can be of various length, we randomly sample sub-sequences
-        video_len = len(frame_paths)
-        if video_len > self.video_length * self.scale:
-            needed = self.scale * (self.video_length - 1)
-            gap = video_len - needed
-            start = 0 if gap == 0 else np.random.randint(0, gap, 1)[0]
-            subseq = np.linspace(start, start + needed, self.video_length, endpoint=True, dtype=np.int32)
-        elif video_len >= self.video_length:
-            subseq = np.arange(0, self.video_length)
-        else:
+        if len(frame_paths) < self.video_length:
             raise ValueError('invalid video length: {} < {}'
-                .format(video_len, self.video_length))
+                .format(len(frame_paths), self.video_length))
 
         # read video
-        video = read_images(frame_paths[subseq], self.dtype)
+        video = read_images(frame_paths, self.dtype)
         if len(video.shape) != 4:
             raise ValueError('invalid video.shape')
-        
-        return (video.transpose(3, 0, 1, 2) - 128.) / 128.
+        video = video.transpose(3, 0, 1, 2)
+
+        return (video - 128.) / 128.
         # return video.transpose(3, 0, 1, 2)

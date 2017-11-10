@@ -1,17 +1,17 @@
 """
 Perform following preprocessing for MUG Facial Dataset.
- 1. discard videos of neutral facial expression 
- 2. discard videos containing fewer than 64 frames
+ 1. discard videos of neutral facial expression
+ 2. extract subsequences of video clips
  3. crop the face region
- 4. resize 96 x 96
+ 4. resize 64 x 64
 
-To use this scriptm pass the arguments
+To use this script, pass the arguments
 MUG dataset directory and save directory.
 
-I suppose that dataset path is 'subject' directory
-in MUG dataqset
+I suppose that dataset path is 'subject3' directory
+in MUG dataset
 
-<dataset path> 
+<dataset path (subject3)> 
      |
      |--- 001
      |     |
@@ -54,55 +54,59 @@ def main(dataset_path, output_path):
     video_paths = []
     for exp in facial_expressions:
         takes = glob.glob(os.path.join(dataset_path,'*',exp,'*'))
-        video_paths.extend(takes)
+        good_takes = list(filter(lambda name: name.find('nsg') < 0, takes))
+        video_paths.extend(good_takes)
 
     print(">>> {} video clips found.".format(len(video_paths)))
     
-    e = 0.20 # dont use 20% of the end of the video
-    r = 2 # use 1 frame per r frames
-    t = 16 # video length (frame num)
-    s = t // 2 # stride width
+    edge   = 0.20 # dont use 20% of the end of the video
+    speeds = [1, 2] # use 1 frame per speed frames ( to change speed )
+    length = 16 # video length (frame num)
+    stride = length // 2 # stride width
 
     # perform preprocess
     saved_num = 0
     os.makedirs(output_path, exist_ok=True)
     for i, in_dir in enumerate(video_paths):
         images = glob.glob(os.path.join(in_dir, '*.jpg'))
-        # if len(images) < 64: continue
 
-        edge = int(len(images) * e)
-        start, end = edge, len(images) - edge
-        for seq_num, j in enumerate(range(start, end-r*t, s)):
-            out_dir = os.path.join(output_path, "{:04d}_{:02d}".format(i+1, seq_num+1))
-            os.makedirs(out_dir, exist_ok=True)
-        
-            # detect face region of the video
-            mid = j + 16
-            image = cv2.imread(images[mid])
-            rect = detect_face(image)
+        edge_frames = int(len(images) * edge)
+        start = edge_frames
+        end   = len(images) - edge_frames
+        for speed in speeds:
+            frame_width = speed*length
+            for seq_n, j in enumerate(range(start, end-frame_width, stride)[0:-1]):
+                out_dir = os.path.join(output_path, "{:04d}_{:d}_{:02d}".format(i+1, speed, seq_n+1))
+                os.makedirs(out_dir, exist_ok=True)
+            
+                # detect face region of the video clip 
+                mid_frame = j + frame_width//2
+                image = cv2.imread(images[mid_frame])
+                rect = detect_face(image)
+                if rect is None: continue
 
-            for k in range(t):
-                # read img
-                image = cv2.imread(images[j+2*k])
+                for k in range(length):
+                    # read img
+                    image = cv2.imread(images[j+speed*k])
 
-                # crop face part
-                x, y = rect[0], rect[1]
-                w, h = rect[2], rect[3]
-                image = image[y:y+h, x:x+w]
+                    # crop face part
+                    x, y = rect[0], rect[1]
+                    w, h = rect[2], rect[3]
+                    image = image[y:y+h, x:x+w]
 
-                # resize 64, 64
-                image = cv2.resize(image,(64, 64))
+                    # resize 64, 64
+                    image = cv2.resize(image,(64, 64))
 
-                # save
-                image_name = "{:02d}.jpg".format(k+1)
-                cv2.imwrite(os.path.join(out_dir, image_name) , image)
+                    # save
+                    image_name = "{:02d}.jpg".format(k+1)
+                    cv2.imwrite(os.path.join(out_dir, image_name) , image)
 
-            saved_num += 1
-            print("{}({} frames) --> {}(offset:{})".format(
-                                                    '/'.join(in_dir.split('/')[-3:]),
-                                                    len(images),
-                                                    '/'.join(out_dir.split('/')[-2:]),
-                                                    j))
+                saved_num += 1
+                print("{}({} frames) --> {}(offset:{}, speed:{})".format(
+                                                        '/'.join(in_dir.split('/')[-3:]),
+                                                        len(images),
+                                                        '/'.join(out_dir.split('/')[-2:]),
+                                                        j, speed))
         print("")
 
     print(">>> preprocess finished and {} video clips saved".format(saved_num))
