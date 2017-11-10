@@ -58,36 +58,54 @@ def main(dataset_path, output_path):
 
     print(">>> {} video clips found.".format(len(video_paths)))
     
-    # perform preprocess
+    e = 0.20 # dont use 20% of the end of the video
+    r = 2 # use 1 frame per r frames
+    t = 16 # video length (frame num)
+    s = t // 2 # stride width
 
+    # perform preprocess
+    saved_num = 0
     os.makedirs(output_path, exist_ok=True)
     for i, in_dir in enumerate(video_paths):
         images = glob.glob(os.path.join(in_dir, '*.jpg'))
-        if len(images) < 64: continue
-        
-        # detect face region of the video
-        image = cv2.imread(images[len(images)//2])
-        rect = detect_face(image)
+        # if len(images) < 64: continue
 
-        out_dir = os.path.join(output_path, "{:04d}".format(i+1))
-        for image_path in images:
-            # read img
-            image = cv2.imread(image_path)
-
-            # crop face part
-            x, y = rect[0], rect[1]
-            w, h = rect[2], rect[3]
-            image = image[y:y+h, x:x+w]
-
-            # resize 96x96
-            image = cv2.resize(image,(96, 96))
-
-            # save
-            image_name = os.path.basename(image_path)
+        edge = int(len(images) * e)
+        start, end = edge, len(images) - edge
+        for seq_num, j in enumerate(range(start, end-r*t, s)):
+            out_dir = os.path.join(output_path, "{:04d}_{:02d}".format(i+1, seq_num+1))
             os.makedirs(out_dir, exist_ok=True)
-            cv2.imwrite(os.path.join(out_dir, image_name) , image)
+        
+            # detect face region of the video
+            mid = j + 16
+            image = cv2.imread(images[mid])
+            rect = detect_face(image)
 
-        print("{} --> {}".format(in_dir, out_dir))
+            for k in range(t):
+                # read img
+                image = cv2.imread(images[j+2*k])
+
+                # crop face part
+                x, y = rect[0], rect[1]
+                w, h = rect[2], rect[3]
+                image = image[y:y+h, x:x+w]
+
+                # resize 64, 64
+                image = cv2.resize(image,(64, 64))
+
+                # save
+                image_name = "{:02d}.jpg".format(k+1)
+                cv2.imwrite(os.path.join(out_dir, image_name) , image)
+
+            saved_num += 1
+            print("{}({} frames) --> {}(offset:{})".format(
+                                                    '/'.join(in_dir.split('/')[-3:]),
+                                                    len(images),
+                                                    '/'.join(out_dir.split('/')[-2:]),
+                                                    j))
+        print("")
+
+    print(">>> preprocess finished and {} video clips saved".format(saved_num))
 
 if __name__=="__main__":
     if len(sys.argv) < 3:
