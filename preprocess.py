@@ -1,5 +1,5 @@
 """
-Perform following preprocessing for MUG Facial Dataset.
+Perform following preprocessing for ** MUG Facial Dataset **.
  1. discard videos of neutral facial expression
  2. extract subsequences of video clips
  3. crop the face region
@@ -23,7 +23,7 @@ in MUG dataset
            :
 """
 
-import sys, os, glob
+import sys, os, glob, shutil
 import cv2
 
 CASCADE_PATH = "data/cv_models/haarcascade_frontalface_default.xml"
@@ -59,8 +59,8 @@ def main(dataset_path, output_path):
 
     print(">>> {} video clips found.".format(len(video_paths)))
     
-    edge   = 0.20 # dont use 20% of the end of the video
-    speeds = [1, 2] # use 1 frame per speed frames ( to change speed )
+    edge   = 0.10 # dont use end of frames of the video
+    speeds = [2] # use 1 frame per speed frames ( to change speed )
     length = 16 # video length (frame num)
     stride = length // 2 # stride width
 
@@ -71,7 +71,7 @@ def main(dataset_path, output_path):
         images = glob.glob(os.path.join(in_dir, '*.jpg'))
 
         edge_frames = int(len(images) * edge)
-        start = edge_frames
+        start = 0
         end   = len(images) - edge_frames
         for speed in speeds:
             frame_width = speed*length
@@ -79,12 +79,14 @@ def main(dataset_path, output_path):
                 out_dir = os.path.join(output_path, "{:04d}_{:d}_{:02d}".format(i+1, speed, seq_n+1))
                 os.makedirs(out_dir, exist_ok=True)
             
-                # detect face region of the video clip 
+                # detect face region of the video clip
                 mid_frame = j + frame_width//2
                 image = cv2.imread(images[mid_frame])
                 rect = detect_face(image)
-                if rect is None: continue
-
+                if rect is None:
+                    shutil.rmtree(out_dir)
+                    continue
+                
                 for k in range(length):
                     # read img
                     image = cv2.imread(images[j+speed*k])
