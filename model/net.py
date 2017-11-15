@@ -5,6 +5,7 @@ import numpy as np
 import chainer
 import chainer.functions as F
 import chainer.links as L
+from chainer import Variable
 
 def add_noise(x, sigma):
     xp = chainer.cuda.get_array_module(x.data)
@@ -81,11 +82,11 @@ class VideoDiscriminator(chainer.Chain):
 
         return y
 
-class Generator(chainer.Chain):
+class ImageGenerator(chainer.Chain):
     def __init__(self, channel=3, T=16, dim_zc=50, dim_zm=10):
-        super(Generator, self).__init__()
+        super(ImageGenerator, self).__init__()
         
-        ch = channel
+        self.ch = channel
         self.dim_zc = dim_zc
         self.dim_zm = dim_zm
         self.T = T
@@ -94,6 +95,7 @@ class Generator(chainer.Chain):
 
         with self.init_scope():
             n_hidden = self.n_hidden
+            ch = self.ch
 
             w = chainer.initializers.GlorotNormal()
             
@@ -116,23 +118,20 @@ class Generator(chainer.Chain):
         return np.random.normal(0, 0.33, size=[batchsize, size]).astype(np.float32)
 
     def make_zm(self, h0, batchsize):
-        """ make zm vectors
-
-        """
-        batchsize = h0.shape[0]
+        """ make zm vectors """
         xp = chainer.cuda.get_array_module(h0)
 
         ht = h0
         zm = Variable()
         for i in range(self.T):
             e = Variable(xp.asarray(self.make_hidden(batchsize, self.dim_zm)))
-            zm_t = gru(ht, e)
+            zm_t = self.g0(ht, e)
             ht = zm_t # use zm_t as next hidden vector
 
             if i == 0:
                 zm = F.reshape(zm_t, (1, batchsize, self.dim_zm))
             else:
-                zm = F.concat([zm, zm_t], axis=0)
+                zm = F.concat([zm, F.reshape(zm_t, (1, batchsize, self.dim_zm))], axis=0)
 
         return zm
 
@@ -142,16 +141,18 @@ class Generator(chainer.Chain):
         # make [zc, zm]
         if zc is None:
             zc = self.make_hidden(batchsize, self.dim_zc)
+        zc = F.tile(zc, (self.T, 1, 1))
         zm = self.make_zm(h0, batchsize)
-        z = F.concat([zc, zm], axis=1)
-        z = z.reshape((batchsize, self.n_hidden, 1, 1))
-
+        z = F.concat([zc, zm], axis=2)
+        z = z.reshape((batchsize*self.T, self.n_hidden, 1, 1))
+        
         # G([zc, zm])
         x = F.relu(self.bn1(self.dc1(z)))
         x = F.relu(self.bn2(self.dc2(x)))
         x = F.relu(self.bn3(self.dc3(x)))
         x = F.relu(self.bn4(self.dc4(x)))
         x = F.tanh(self.dc5(x))
+        x = x.reshape((batchsize, self.T, self.ch, 64, 64))
 
         return x
 
@@ -162,5 +163,5 @@ if __name__ ==  "__main__":
     print(
         count_model_params(ImageDiscriminator()),
         count_model_params(VideoDiscriminator()),
-        count_model_params(Generator()),
+        count_model_params(ImageGenerator()),
     )

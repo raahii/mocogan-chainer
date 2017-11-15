@@ -11,6 +11,23 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
 
+def write_video(x, filepath, ext, fps=25.0):
+    ch, frames, height, width = x.shape
+    
+    imgs = []
+    fig = plt.figure()
+    x = chainer.cuda.to_cpu(x).transpose(1,2,3,0) / 2. + 0.5
+    for i in range(frames):
+        img = plt.imshow(x[i], animated=True)
+        imgs.append([img])
+
+    ani = animation.ArtistAnimation(fig, imgs, interval=200)
+    if ext == 'mp4':
+        ani.save(filepath, writer="ffmpeg")
+    elif ext == 'gif':
+        ani.save(filepath, writer="imagemagick")
+    plt.close()
+
 def write_grid_videos(x, filepath, ext):
     fig = plt.figure()
     x = chainer.cuda.to_cpu(x)
@@ -46,24 +63,7 @@ def write_grid_videos(x, filepath, ext):
         ani.save(filepath, writer="imagemagick")
     plt.close()
 
-def write_video(x, filepath, ext, fps=25.0):
-    ch, frames, height, width = x.shape
-    
-    imgs = []
-    fig = plt.figure()
-    x = chainer.cuda.to_cpu(x).transpose(1,2,3,0) / 2. + 0.5
-    for i in range(frames):
-        img = plt.imshow(x[i], animated=True)
-        imgs.append([img])
-
-    ani = animation.ArtistAnimation(fig, imgs, interval=200)
-    if ext == 'mp4':
-        ani.save(filepath, writer="ffmpeg")
-    elif ext == 'gif':
-        ani.save(filepath, writer="imagemagick")
-    plt.close()
-
-def save_video_samples(gru, gen, num, size, ch, T, seed, save_path, ext):
+def save_video_samples(gen, num, size, ch, T, seed, save_path, ext):
     @chainer.training.make_extension()
     def make_video(trainer):
         np.random.seed(seed)
@@ -84,12 +84,6 @@ def save_video_samples(gru, gen, num, size, ch, T, seed, save_path, ext):
                 videos[i] = gen(z).data
         
         videos = videos.transpose(1,2,0,3,4)
-        
-        # output_dir = os.path.join(save_path, 'samples', 'epoch_{}'.format(updater.epoch))
-        # os.makedirs(output_dir, exist_ok=True)
-        # for i in range(videos.shape[0]):
-        #     output_path = os.path.join(output_dir, '{}.{}'.format(i, ext))
-        #     write_video(videos[i], output_path, ext)
 
         output_path = os.path.join(save_path, 'samples', 'epoch_{}.{}'.format(updater.epoch, ext))
         write_grid_videos(videos, output_path, ext)
