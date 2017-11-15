@@ -25,8 +25,14 @@ in MUG dataset
 
 import sys, os, glob, shutil
 import cv2
+import re
 
+FRAME_NUMBER = re.compile(r'img_([0-9]+).jpg')
 CASCADE_PATH = "data/cv_models/haarcascade_frontalface_default.xml"
+
+def fname2num(name):
+    match = re.search(FRAME_NUMBER, name)
+    return match.group(1)
 
 def show_img(img):
     cv2.imshow('image', img)
@@ -53,9 +59,10 @@ def main(dataset_path, output_path):
                           "fear", "sadness", "surprise"]
     video_paths = []
     for exp in facial_expressions:
-        takes = glob.glob(os.path.join(dataset_path,'*',exp,'*'))
-        good_takes = list(filter(lambda name: name.find('nsg') < 0, takes))
-        video_paths.extend(good_takes)
+        takes = glob.glob(os.path.join(dataset_path, '*', exp, '*'))
+        # good_takes = list(filter(lambda name: name.find('nsg') < 0, takes))
+        # video_paths.extend(good_takes)
+        video_paths.extend(takes)
 
     print(">>> {} video clips found.".format(len(video_paths)))
     
@@ -69,6 +76,7 @@ def main(dataset_path, output_path):
     os.makedirs(output_path, exist_ok=True)
     for i, in_dir in enumerate(video_paths):
         images = glob.glob(os.path.join(in_dir, '*.jpg'))
+        images = sorted(images, key=fname2num)
 
         edge_frames = int(len(images) * edge)
         start = 0

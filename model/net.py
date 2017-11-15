@@ -117,6 +117,9 @@ class ImageGenerator(chainer.Chain):
     def make_hidden(self, batchsize, size):
         return np.random.normal(0, 0.33, size=[batchsize, size]).astype(np.float32)
 
+    def make_h0(self, batchsize):
+        return self.make_hidden(batchsize, self.dim_zm)
+
     def make_zm(self, h0, batchsize):
         """ make zm vectors """
         xp = chainer.cuda.get_array_module(h0)
@@ -137,10 +140,11 @@ class ImageGenerator(chainer.Chain):
 
     def __call__(self, h0, zc=None):
         batchsize = h0.shape[0]
+        xp = chainer.cuda.get_array_module(h0)
         
         # make [zc, zm]
         if zc is None:
-            zc = self.make_hidden(batchsize, self.dim_zc)
+            zc = Variable(xp.asarray(self.make_hidden(batchsize, self.dim_zc)))
         zc = F.tile(zc, (self.T, 1, 1))
         zm = self.make_zm(h0, batchsize)
         z = F.concat([zc, zm], axis=2)

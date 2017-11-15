@@ -1,42 +1,31 @@
 import os
 
+import numpy as np
+from PIL import Image, GifImagePlugin
+
 import chainer
 import chainer.cuda
 from chainer import Variable
 import chainer.functions as F
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-import numpy as np
+def write_grid_videos(x, save_dir):
+    """
+    create grid video
+     * save all frames
+     * create an gif image with imageio
 
-def write_video(x, filepath, ext, fps=25.0):
-    ch, frames, height, width = x.shape
-    
-    imgs = []
-    fig = plt.figure()
-    x = chainer.cuda.to_cpu(x).transpose(1,2,3,0) / 2. + 0.5
-    for i in range(frames):
-        img = plt.imshow(x[i], animated=True)
-        imgs.append([img])
+    x : (batchsize, video_length, channel, height, width)
+    """
 
-    ani = animation.ArtistAnimation(fig, imgs, interval=200)
-    if ext == 'mp4':
-        ani.save(filepath, writer="ffmpeg")
-    elif ext == 'gif':
-        ani.save(filepath, writer="imagemagick")
-    plt.close()
-
-def write_grid_videos(x, filepath, ext):
-    fig = plt.figure()
     x = chainer.cuda.to_cpu(x)
-    x = x.transpose(0, 2, 3, 4, 1) / 2. + 0.5
+    x = x.transpose(0, 1, 3, 4, 2)
+    x = ((x / 2. + 0.5) * 255).astype(np.uint8)
     bs, t, h, w, c = x.shape
 
-    if c == 1:
-        x = x.reshape(bs, t, h, w)
-
+    # if c == 1:
+    #     x = x.reshape(bs, t, h, w)
+    
+    # make (sq x sq) grid
     sq = int(np.sqrt(bs))
     for i in range(sq):
         row = x[sq*i]
@@ -48,44 +37,29 @@ def write_grid_videos(x, filepath, ext):
             videos = row
         else:
             videos = np.concatenate([videos, row], axis=1)
-
-    imgs = []
+    
+    # save frames
+    gif_imgs = []
     for i in range(t):
-        img = plt.imshow(videos[i], animated=True)
-        if c == 1:
-            plt.gray()
-        imgs.append([img])
+        grid_frame = Image.fromarray(videos[i])
+        fname = os.path.join(save_dir, "{:02d}.jpg".format(i+1))
+        grid_frame.save(fname, 'JPEG', quality=100, optimize=True)
+        gif_imgs.append(grid_frame)
 
-    ani = animation.ArtistAnimation(fig, imgs, interval=200)
-    if ext == 'mp4':
-        ani.save(filepath, writer="ffmpeg")
-    elif ext == 'gif':
-        ani.save(filepath, writer="imagemagick")
-    plt.close()
+    fname = os.path.join(save_dir+".gif")
+    gif_imgs[0].save(fname, save_all=True, append_images=gif_imgs[1:], loop=True)
 
-def save_video_samples(gen, num, size, ch, T, seed, save_path, ext):
+def save_video_samples(image_gen, num, size, ch, T, seed, save_path):
     @chainer.training.make_extension()
     def make_video(trainer):
         np.random.seed(seed)
         updater = trainer.updater
 
-        zc = Variable(updater.converter(gru.make_zc(num*num), updater.device))
-        xp = chainer.cuda.get_array_module(zc.data)
-        
-        videos = xp.empty((T, num*num, ch, size, size), dtype=xp.float32)
-        ht = Variable(xp.asarray(gru.make_h0(num*num)))
-        with chainer.using_config('train', False):
-            for i in range(T):
-                e = Variable(xp.asarray(gru.make_zm(num*num)))
-                zm = gru(ht, e)
-                ht = zm
-                z = F.concat([zc, zm], axis=1)
-                
-                videos[i] = gen(z).data
-        
-        videos = videos.transpose(1,2,0,3,4)
+        h0 = Variable(updater.converter(image_gen.make_h0(num*num), updater.device))
+        videos = image_gen(h0)
 
-        output_path = os.path.join(save_path, 'samples', 'epoch_{}.{}'.format(updater.epoch, ext))
-        write_grid_videos(videos, output_path, ext)
+        output_dir = os.path.join(save_path, 'samples', 'epoch_{}'.format(updater.epoch))
+        os.makedirs(output_dir, exist_ok=True)
+        write_grid_videos(videos.data, output_dir)
         
     return make_video

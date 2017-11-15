@@ -1,6 +1,3 @@
-import matplotlib
-matplotlib.use('Agg')
-
 import argparse
 import os, sys
 from pytz import timezone
@@ -25,12 +22,12 @@ def main():
     parser = argparse.ArgumentParser(description='Train script')
     parser.add_argument('--gpu', '-g', type=int, default=-1, help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--dataset', default='data/dataset')
-    parser.add_argument('--batchsize', type=int, default=64)
+    parser.add_argument('--batchsize', type=int, default=200)
     parser.add_argument('--max_epoch', type=int, default=1000)
     parser.add_argument('--display_interval', type=int, default=1, help='Interval of displaying log to console')
     parser.add_argument('--snapshot_interval', type=int, default=10, help='Interval of snapshot')
     parser.add_argument('--gen_samples_interval', type=int, default=5)
-    parser.add_argument('--num_gen_samples', type=int, default=5)
+    parser.add_argument('--gen_samples_num', type=int, default=10)
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--resume', '-r', default='',
                         help='Resume the training from snapshot')
@@ -61,8 +58,7 @@ def main():
     now = datetime.now(timezone('Asia/Tokyo')).strftime("%Y_%m%d_%H%M")
     save_path = 'result/' + now + '/'
     os.makedirs(os.path.join(save_path, 'samples'), exist_ok=True)
-    generate_num = min(args.num_gen_samples, len(train_dataset))
-    ext = 'gif'
+    generate_num = min(args.gen_samples_num, len(train_dataset))
 
     def make_optimizer(model, alpha=1e-3, beta1=0.9, beta2=0.999):
         optimizer = chainer.optimizers.Adam(alpha=alpha, beta1=beta1)
@@ -118,7 +114,7 @@ def main():
         'epoch', 'iteration', 'image_gen/loss', 'image_dis/loss', 'video_dis/loss'
     ]), trigger=display_interval)
     trainer.extend(
-        save_video_samples(image_gen, generate_num, size, channel, video_length, args.seed, save_path, ext),
+        save_video_samples(image_gen, generate_num, size, channel, video_length, args.seed, save_path),
         trigger=gen_samples_interval)
 
     if args.resume:

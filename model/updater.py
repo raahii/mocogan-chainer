@@ -42,7 +42,7 @@ class Updater(chainer.training.StandardUpdater):
         y_real_v = video_dis(x_real)
 
         ## fake data
-        h0 = image_gen.make_hidden(batchsize, image_gen.dim_zm)
+        h0 = Variable(xp.asarray(image_gen.make_h0(batchsize)))
         x_fake = image_gen(h0)
         x_fake = x_fake.transpose(0, 2, 1, 3, 4)
         y_fake_i = image_dis(x_fake[:,:,xp.random.randint(0, self.T)])

@@ -6,35 +6,26 @@
 
 ## Chainer implementation of MoCoGAN
 
-This repository contains an chainer implementation of MoCoGAN: Decomposing Motion and Content for Video Generation by Sergey Tulyakov, Ming-Yu Liu, Xiaodong Yang, Jan Kautz.
+This repository contains an chainer implementation of MoCoGAN.
+
+Paper: [MoCoGAN: Decomposing Motion and Content for Video Generation by Sergey Tulyakov, Ming-Yu Liu, Xiaodong Yang, Jan Kautz](https://arxiv.org/abs/1707.04993).
 
 ### Result
-Some **good** samples generated videos.
 
-<!-- <img width='33%' src='result/generated_samples/png/7.png'><img width='33%' src='result/generated_samples/png/13.png'><img width='33%' src='result/generated_samples/png/17.png'> -->
-<!-- <img width='33%' src='result/generated_samples/png/21.png'><img width='33%' src='result/generated_samples/png/30.png'><img width='33%' src='result/generated_samples/png/31.png'> -->
-<!-- <img width='33%' src='result/generated_samples/png/40.png'><img width='33%' src='result/generated_samples/png/97.png'> -->
-
-<!-- ``` -->
-<!-- python generate_samples.py result/trained_models/Generator_50epoch.npz <save direcotry> <num to be generated> -->
-<!-- ``` -->
+preparing...
 
 ### Requirements
 
-- chainer(2.0.1)
+- Python 3.6
+- chainer
 - opencv
+- pillow
 
 ### Dataset
 
-I train model only using **MUG Facial Expression Database**. 
+I train model only using **[MUG Facial Expression Database](https://mug.ee.auth.gr/fed/)**. 
 
 ### Usage
-
-#### Generation
-
-```
-python generate_samples.py <model_file> <save_dir> <num samples>
-```
 
 #### Preparing Dataset
 
@@ -47,5 +38,11 @@ python preprocess.py <downloaded datset path> <save path>
 #### Training
 
 ```
-python train.py --dataset=<save path>
+python train.py --dataset <save path> --batchsize <batchsize>
+```
+
+#### Generation
+
+```
+python generate_samples.py -m <model_file> -d <save_dir> -n <num samples>
 ```

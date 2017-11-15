@@ -7,3 +7,4 @@ result/*
 !result/trained_models/
 deploy.sh
 notify_slack.py
+make_grid_frames.py

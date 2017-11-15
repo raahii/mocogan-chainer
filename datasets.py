@@ -1,7 +1,15 @@
 import sys, os, glob
+import re
+
 import chainer
 import numpy as np
 from PIL import Image
+
+FRAME_NUMBER = re.compile(r'([0-9]+).jpg')
+
+def fname2num(name):
+    match = re.search(FRAME_NUMBER, name)
+    return match.group(1)
 
 def read_images(paths):
     video = []
@@ -27,7 +35,9 @@ class MugDataset(chainer.dataset.DatasetMixin):
 
     def get_example(self, i):
         """return video shape: (ch, frame, width, height)"""
-        frame_paths = np.asarray(glob.glob(os.path.join(self.video_paths[i], '*.jpg')))
+
+        frame_paths = sorted(glob.glob(os.path.join(self.video_paths[i], '*.jpg')), key=fname2num)
+        frame_paths = np.array(frame_paths)
 
         # videos can be of various length, we randomly sample sub-sequences
         if len(frame_paths) < self.video_length:
