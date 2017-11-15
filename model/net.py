@@ -19,21 +19,21 @@ class ImageDiscriminator(chainer.Chain):
 
         self.use_noise   = use_noise
         self.noise_sigma = noise_sigma
+        ch = channel
+        ndf = 64
 
         with self.init_scope():
             w = chainer.initializers.GlorotNormal()
-            in_ch = channel
-            out_ch = 64
 
-            self.dc1 = L.ConvolutionND(2,    in_ch,   out_ch, 4, stride=2, pad=1, initialW=w)
-            self.dc2 = L.ConvolutionND(2,   out_ch, out_ch*2, 4, stride=2, pad=1, initialW=w)
-            self.dc3 = L.ConvolutionND(2, out_ch*2, out_ch*4, 4, stride=2, pad=1, initialW=w)
-            self.dc4 = L.ConvolutionND(2, out_ch*4, out_ch*8, 4, stride=2, pad=1, initialW=w)
-            self.dc5 = L.ConvolutionND(2, out_ch*8,        1, 4, stride=1, pad=0, initialW=w)
+            self.dc1 = L.ConvolutionND(2,    ch,   ndf, 4, stride=2, pad=1, initialW=w)
+            self.dc2 = L.ConvolutionND(2,   ndf, ndf*2, 4, stride=2, pad=1, initialW=w)
+            self.dc3 = L.ConvolutionND(2, ndf*2, ndf*4, 4, stride=2, pad=1, initialW=w)
+            self.dc4 = L.ConvolutionND(2, ndf*4, ndf*8, 4, stride=2, pad=1, initialW=w)
+            self.dc5 = L.ConvolutionND(2, ndf*8,     1, 4, stride=1, pad=0, initialW=w)
 
-            self.bn2 = L.BatchNormalization(out_ch*2)
-            self.bn3 = L.BatchNormalization(out_ch*4)
-            self.bn4 = L.BatchNormalization(out_ch*8)
+            self.bn2 = L.BatchNormalization(ndf*2)
+            self.bn3 = L.BatchNormalization(ndf*4)
+            self.bn4 = L.BatchNormalization(ndf*8)
 
     def __call__(self, x):
         if self.use_noise:
@@ -53,21 +53,21 @@ class VideoDiscriminator(chainer.Chain):
 
         self.use_noise   = use_noise
         self.noise_sigma = noise_sigma
+        ch = channel
+        ndf = 64
 
         with self.init_scope():
             w = chainer.initializers.GlorotNormal()
-            in_ch = channel
-            out_ch = 64
 
-            self.dc1 = L.ConvolutionND(3,    in_ch,   out_ch, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc2 = L.ConvolutionND(3,   out_ch, out_ch*2, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc3 = L.ConvolutionND(3, out_ch*2, out_ch*4, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc4 = L.ConvolutionND(3, out_ch*4, out_ch*8, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc5 = L.ConvolutionND(3, out_ch*8,        1, 4, stride=(1,3,3), pad=(0,0,0), initialW=w)
+            self.dc1 = L.ConvolutionND(3,    ch,   ndf, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
+            self.dc2 = L.ConvolutionND(3,   ndf, ndf*2, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
+            self.dc3 = L.ConvolutionND(3, ndf*2, ndf*4, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
+            self.dc4 = L.ConvolutionND(3, ndf*4, ndf*8, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
+            self.dc5 = L.ConvolutionND(3, ndf*8,     1, 4, stride=(1,3,3), pad=(0,0,0), initialW=w)
 
-            self.bn2 = L.BatchNormalization(out_ch*2)
-            self.bn3 = L.BatchNormalization(out_ch*4)
-            self.bn4 = L.BatchNormalization(out_ch*8)
+            self.bn2 = L.BatchNormalization(ndf*2)
+            self.bn3 = L.BatchNormalization(ndf*4)
+            self.bn4 = L.BatchNormalization(ndf*8)
 
     def __call__(self, x):
         if self.use_noise:
@@ -82,30 +82,71 @@ class VideoDiscriminator(chainer.Chain):
         return y
 
 class Generator(chainer.Chain):
-    def __init__(self, channel=3, n_hidden=60):
+    def __init__(self, channel=3, T=16, dim_zc=50, dim_zm=10):
         super(Generator, self).__init__()
-        self.n_hidden = n_hidden
+        
+        ch = channel
+        self.dim_zc = dim_zc
+        self.dim_zm = dim_zm
+        self.T = T
+        self.n_hidden = dim_zc + dim_zm
+        ndf = 64
 
         with self.init_scope():
+            n_hidden = self.n_hidden
+
             w = chainer.initializers.GlorotNormal()
-            in_ch = channel
-            out_ch = 64
+            
+            # Rm
+            self.g0 = L.StatelessGRU(self.dim_zm, self.dim_zm, 0.2)
+            
+            # G
+            self.dc1 = L.DeconvolutionND(2, n_hidden, ndf*8, 4, stride=1, pad=0, initialW=w)
+            self.dc2 = L.DeconvolutionND(2,    ndf*8, ndf*4, 4, stride=2, pad=1, initialW=w)
+            self.dc3 = L.DeconvolutionND(2,    ndf*4, ndf*2, 4, stride=2, pad=1, initialW=w)
+            self.dc4 = L.DeconvolutionND(2,    ndf*2,   ndf, 4, stride=2, pad=1, initialW=w)
+            self.dc5 = L.DeconvolutionND(2,      ndf,    ch, 4, stride=2, pad=1, initialW=w)
 
-            self.dc1 = L.DeconvolutionND(2, n_hidden, out_ch*8, 4, stride=1, pad=0, initialW=w)
-            self.dc2 = L.DeconvolutionND(2, out_ch*8, out_ch*4, 4, stride=2, pad=1, initialW=w)
-            self.dc3 = L.DeconvolutionND(2, out_ch*4, out_ch*2, 4, stride=2, pad=1, initialW=w)
-            self.dc4 = L.DeconvolutionND(2, out_ch*2,   out_ch, 4, stride=2, pad=1, initialW=w)
-            self.dc5 = L.DeconvolutionND(2,   out_ch,    in_ch, 4, stride=2, pad=1, initialW=w)
+            self.bn1 = L.BatchNormalization(ndf*8)
+            self.bn2 = L.BatchNormalization(ndf*4)
+            self.bn3 = L.BatchNormalization(ndf*2)
+            self.bn4 = L.BatchNormalization(ndf)
 
-            self.bn1 = L.BatchNormalization(out_ch*8)
-            self.bn2 = L.BatchNormalization(out_ch*4)
-            self.bn3 = L.BatchNormalization(out_ch*2)
-            self.bn4 = L.BatchNormalization(out_ch)
+    def make_hidden(self, batchsize, size):
+        return np.random.normal(0, 0.33, size=[batchsize, size]).astype(np.float32)
 
-    def __call__(self, z):
-        bs, dim = z.shape
-        z = z.reshape((bs, dim, 1, 1))
+    def make_zm(self, h0, batchsize):
+        """ make zm vectors
+
+        """
+        batchsize = h0.shape[0]
+        xp = chainer.cuda.get_array_module(h0)
+
+        ht = h0
+        zm = Variable()
+        for i in range(self.T):
+            e = Variable(xp.asarray(self.make_hidden(batchsize, self.dim_zm)))
+            zm_t = gru(ht, e)
+            ht = zm_t # use zm_t as next hidden vector
+
+            if i == 0:
+                zm = F.reshape(zm_t, (1, batchsize, self.dim_zm))
+            else:
+                zm = F.concat([zm, zm_t], axis=0)
+
+        return zm
+
+    def __call__(self, h0, zc=None):
+        batchsize = h0.shape[0]
         
+        # make [zc, zm]
+        if zc is None:
+            zc = self.make_hidden(batchsize, self.dim_zc)
+        zm = self.make_zm(h0, batchsize)
+        z = F.concat([zc, zm], axis=1)
+        z = z.reshape((batchsize, self.n_hidden, 1, 1))
+
+        # G([zc, zm])
         x = F.relu(self.bn1(self.dc1(z)))
         x = F.relu(self.bn2(self.dc2(x)))
         x = F.relu(self.bn3(self.dc3(x)))
@@ -113,31 +154,6 @@ class Generator(chainer.Chain):
         x = F.tanh(self.dc5(x))
 
         return x
-
-class GRU(chainer.Chain):
-    def __init__(self, T=16, n_zc=50, n_zm=10):
-        super(GRU, self).__init__()
-        
-        self.T = T
-        self.n_zc = n_zc
-        self.n_zm = n_zm
-
-        with self.init_scope():
-            self.g1 = L.StatelessGRU(self.n_zm, self.n_zm, 0.2)
-
-    def __call__(self, h0, e):
-        z = self.g1(h0, e)
-
-        return z
-
-    def make_zc(self, batchsize):
-        return np.random.normal(0, 0.33, size=[batchsize, self.n_zc]).astype(np.float32)
-
-    def make_h0(self, batchsize):
-        return np.random.normal(0, 0.33, size=[batchsize, self.n_zm]).astype(np.float32)
-
-    def make_zm(self, batchsize):
-        return np.random.normal(0, 0.33, size=[batchsize, self.n_zm]).astype(np.float32)
 
 def count_model_params(m):
     return sum(p.data.size for p in m.params())
@@ -147,5 +163,4 @@ if __name__ ==  "__main__":
         count_model_params(ImageDiscriminator()),
         count_model_params(VideoDiscriminator()),
         count_model_params(Generator()),
-        count_model_params(GRU()),
     )
