@@ -8,3 +8,4 @@ result/*
 deploy.sh
 notify_slack.py
 make_grid_frames.py
+model/updater_svc.py
