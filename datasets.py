@@ -5,10 +5,10 @@ import chainer
 import numpy as np
 from PIL import Image
 
-FRAME_NUMBER = re.compile(r'([0-9]+).jpg')
+frame_name_regex = re.compile(r'([0-9]+).jpg')
 
-def fname2num(name):
-    match = re.search(FRAME_NUMBER, name)
+def frame_number(name):
+    match = re.search(frame_name_regex, name)
     return match.group(1)
 
 def read_images(paths):
@@ -27,16 +27,25 @@ def read_images(paths):
 class MugDataset(chainer.dataset.DatasetMixin):
     def __init__(self, root_path, video_length=16):
         self.root_path = root_path
-        self.video_paths = glob.glob(os.path.join(root_path, "*"))
         self.video_length = video_length
 
+        self.video_categories = glob.glob(os.path.join(self.root_path, "*"))
+        self.num_labels = len(self.video_categories)
+
+        self.videos = []
+        for category in self.video_categories:
+            categ = int(os.path.basename(category))
+            for video_path in glob.glob(os.path.join(category, "*")):
+                self.videos.append((video_path, categ))
+
     def __len__(self):
-        return len(self.video_paths)
+        return len(self.videos)
 
     def get_example(self, i):
         """return video shape: (ch, frame, width, height)"""
+        video_path, categ = self.videos[i]
 
-        frame_paths = sorted(glob.glob(os.path.join(self.video_paths[i], '*.jpg')), key=fname2num)
+        frame_paths = sorted(glob.glob(os.path.join(video_path, '*.jpg')), key=frame_number)
         frame_paths = np.array(frame_paths)
 
         # videos can be of various length, we randomly sample sub-sequences
@@ -48,9 +57,18 @@ class MugDataset(chainer.dataset.DatasetMixin):
         video = read_images(frame_paths)
         if len(video.shape) != 4:
             raise ValueError('invalid video.shape')
-        video = video.transpose(3, 0, 1, 2)
 
-        return (video - 128.) / 128.
+        # label data
+        t, y, x, c = video.shape 
+        label_video = -1.0 * np.ones((t, y, x, self.num_labels), dtype=np.float32)
+
+        label_video[:,:,:,categ] = 1.0
+
+        # concat video and label
+        video = np.concatenate((video, label_video), axis=3)
+        video = video.transpose(3, 0, 1, 2) # (ch, video_len, y, x)
+        
+        return (video - 128.) / 128., categ
 
 class MovingMnistDataset(chainer.dataset.DatasetMixin):
     def __init__(self, npz_path, video_length=16):

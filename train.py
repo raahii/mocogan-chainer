@@ -12,22 +12,28 @@ from datasets import MugDataset, MovingMnistDataset
 from model.net import ImageGenerator
 from model.net import ImageDiscriminator
 from model.net import VideoDiscriminator
-from model.updater import Updater
+from model.net import CategoricalImageGenerator
+from model.net import CategoricalImageDiscriminator
+from model.net import CategoricalVideoDiscriminator
+from model.updater import NormalUpdater
+from model.updater import CategoricalUpdater
 
-from visualize import save_video_samples
-
-sys.path.append(os.path.dirname(__file__))
+from visualize import log_tensorboard
+from tb_chainer import utils, SummaryWriter
 
 def main():
     parser = argparse.ArgumentParser(description='Train script')
     parser.add_argument('--gpu', '-g', type=int, default=-1, help='GPU ID (negative value indicates CPU)')
+    # parser.add_argument('--save_path', default=None)
     parser.add_argument('--dataset', default='data/dataset')
     parser.add_argument('--batchsize', type=int, default=200)
     parser.add_argument('--max_epoch', type=int, default=1000)
+    parser.add_argument('--use_label', action='store_true')
+    parser.add_argument('--save_dirname', default=None)
     parser.add_argument('--display_interval', type=int, default=1, help='Interval of displaying log to console')
     parser.add_argument('--snapshot_interval', type=int, default=10, help='Interval of snapshot')
     parser.add_argument('--gen_samples_interval', type=int, default=5)
-    parser.add_argument('--gen_samples_num', type=int, default=10)
+    parser.add_argument('--gen_samples_num', type=int, default=36)
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--resume', '-r', default='',
                         help='Resume the training from snapshot')
@@ -40,7 +46,10 @@ def main():
     dim_zc       = 50 # the dimension of the content vector
     dim_zm       = 10 # the dimension of the  motion vector
     n_hidden     = dim_zc + dim_zm
+    num_labels   = 6
 
+    # print('*** updater_svc ***')
+    print('*** updater ***')
     print('GPU: {}'.format(args.gpu))
     print('# Minibatch-size: {}'.format(args.batchsize))
     print('# epoch: {}'.format(args.max_epoch))
@@ -50,26 +59,35 @@ def main():
     # train_dataset = MovingMnistDataset(args.dataset, T)
     train_iter = chainer.iterators.SerialIterator(train_dataset, args.batchsize)
     print('# data-size: {}'.format(len(train_dataset)))
-    print('# data-shape: {}'.format(train_dataset[0].shape))
+    print('# data-shape: {}'.format(train_dataset[0][0].shape))
     print('# num-batches: {}'.format(len(train_dataset) // args.batchsize))
+    print('# use_label: {}'.format(args.use_label))
     print('')
 
     # logging configurations
-    now = datetime.now(timezone('Asia/Tokyo')).strftime("%Y_%m%d_%H%M")
-    save_path = 'result/' + now + '/'
+    if args.save_dirname is None:
+        save_dirname = datetime.now(timezone('Asia/Tokyo')).strftime("%Y_%m%d_%H%M")
+    else:
+        save_dirname = args.save_dirname
+    save_path = 'result/' + save_dirname + '/'
     os.makedirs(os.path.join(save_path, 'samples'), exist_ok=True)
-    generate_num = min(args.gen_samples_num, len(train_dataset))
 
     def make_optimizer(model, alpha=1e-3, beta1=0.9, beta2=0.999):
-        optimizer = chainer.optimizers.Adam(alpha=alpha, beta1=beta1)
+        # optimizer = chainer.optimizers.Adam(alpha=alpha, beta1=beta1)
+        optimizer = chainer.optimizers.RMSprop(lr=alpha, alpha=beta1)
         optimizer.setup(model)
         optimizer.add_hook(chainer.optimizer.WeightDecay(1e-5), 'hook_dec')
         return optimizer
 
     # Set up models
-    image_gen = ImageGenerator(channel, T=video_length, dim_zc = dim_zc, dim_zm = dim_zm)
-    image_dis = ImageDiscriminator(channel, use_noise=True, noise_sigma=0.2)
-    video_dis = VideoDiscriminator(channel, use_noise=True, noise_sigma=0.1)
+    if args.use_label:
+        image_gen = CategoricalImageGenerator(channel, video_length, dim_zc, dim_zm, num_labels)
+        image_dis = CategoricalImageDiscriminator(channel)
+        video_dis = CategoricalVideoDiscriminator(channel, num_labels)
+    else:
+        image_gen = ImageGenerator(channel, T=video_length, dim_zc = dim_zc, dim_zm = dim_zm)
+        image_dis = ImageDiscriminator(channel, use_noise=False)
+        video_dis = VideoDiscriminator(channel, use_noise=False)
 
     if args.gpu >= 0:
         chainer.cuda.get_device_from_id(args.gpu).use()
@@ -77,23 +95,42 @@ def main():
         image_dis.to_gpu()
         video_dis.to_gpu()
 
-    opt_image_gen = make_optimizer(image_gen, 2e-4, 0.5)
-    opt_image_dis = make_optimizer(image_dis, 2e-4, 0.5)
-    opt_video_dis = make_optimizer(video_dis, 2e-4, 0.5)
+    opt_image_gen = make_optimizer(image_gen, 5e-5, 0.5)
+    opt_image_dis = make_optimizer(image_dis, 5e-5, 0.5)
+    opt_video_dis = make_optimizer(video_dis, 5e-5, 0.5)
+
+    # init tensorboard writer
+    writer = SummaryWriter(os.path.join('runs', save_dirname))
 
     # Setup updater
-    updater = Updater(
-        models=(image_gen, image_dis, video_dis),
-        video_length=video_length,
-        img_size=size,
-        channel=channel,
-        iterator=train_iter,
-        optimizer={
-            'image_gen': opt_image_gen,
-            'image_dis': opt_image_dis,
-            'video_dis': opt_video_dis,
-        },
-        device=args.gpu)
+    if args.use_label:
+        updater = CategoricalUpdater(
+            models=(image_gen, image_dis, video_dis),
+            video_length=video_length,
+            img_size=size,
+            channel=channel,
+            iterator=train_iter,
+            tensorboard_writer=writer,
+            optimizer={
+                'image_gen': opt_image_gen,
+                'image_dis': opt_image_dis,
+                'video_dis': opt_video_dis,
+            },
+            device=args.gpu)
+    else:
+        updater = NormalUpdater(
+            models=(image_gen, image_dis, video_dis),
+            video_length=video_length,
+            img_size=size,
+            channel=channel,
+            iterator=train_iter,
+            tensorboard_writer=writer,
+            optimizer={
+                'image_gen': opt_image_gen,
+                'image_dis': opt_image_dis,
+                'video_dis': opt_video_dis,
+            },
+            device=args.gpu)
 
     # Setup logging
     trainer = training.Trainer(updater, (args.max_epoch, 'epoch'), out=save_path)
@@ -113,21 +150,25 @@ def main():
     trainer.extend(extensions.PrintReport([
         'epoch', 'iteration', 'image_gen/loss', 'image_dis/loss', 'video_dis/loss'
     ]), trigger=display_interval)
+
+    # logging with tensorboard-chainer
     trainer.extend(
-        save_video_samples(image_gen, generate_num, size, channel, video_length, args.seed, save_path),
+        log_tensorboard(image_gen, args.gen_samples_num, args.use_label, args.seed, writer, save_path),
         trigger=gen_samples_interval)
 
     if args.resume:
         chainer.serializers.load_npz(args.resume, trainer)
-
+    
     trainer.run()
 
     if args.gpu >= 0:
-        gen.to_cpu()
+        image_gen.to_cpu()
+        image_dis.to_cpu()
+        video_dis.to_cpu()
 
-    chainer.serializers.save_npz(os.path.join(savepath, 'image_gen_last.npz'), image_gen)
-    chainer.serializers.save_npz(os.path.join(savepath, 'image_dis_last.npz'), image_dis)
-    chainer.serializers.save_npz(os.path.join(savepath, 'video_dis_last.npz'), video_dis)
+    chainer.serializers.save_npz(os.path.join(save_path, 'image_gen_epoch_fianl.npz'), image_gen)
+    chainer.serializers.save_npz(os.path.join(save_path, 'image_dis_epoch_fianl.npz'), image_dis)
+    chainer.serializers.save_npz(os.path.join(save_path, 'video_dis_epoch_fianl.npz'), video_dis)
 
 if __name__ == '__main__':
     main()

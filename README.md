@@ -23,7 +23,7 @@ preparing...
 
 ### Dataset
 
-I train model only using **[MUG Facial Expression Database](https://mug.ee.auth.gr/fed/)**. 
+I trained the model using **[MUG Facial Expression Database](https://mug.ee.auth.gr/fed/)**. 
 
 ### Usage
 
