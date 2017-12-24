@@ -118,7 +118,7 @@ class ConditionalGANUpdater(chainer.training.StandardUpdater):
         self.img_size = kwargs.pop('img_size')
         self.channel  = kwargs.pop('channel')
         self.tf_writer = kwargs.pop('tensorboard_writer')
-        super(CategoricalUpdater, self).__init__(*args, **kwargs)
+        super(ConditionalGANUpdater, self).__init__(*args, **kwargs)
     
     def loss_vdis(self, dis, y_fake, y_real):
         batchsize = len(y_fake)

@@ -12,11 +12,11 @@ from datasets import MugDataset, MovingMnistDataset
 from model.net import ImageGenerator
 from model.net import ImageDiscriminator
 from model.net import VideoDiscriminator
-from model.net import CategoricalImageGenerator
-from model.net import CategoricalImageDiscriminator
-from model.net import CategoricalVideoDiscriminator
+from model.net import ConditionalImageGenerator
+from model.net import ConditionalImageDiscriminator
+from model.net import ConditionalVideoDiscriminator
 from model.updater import NormalUpdater
-from model.updater import CategoricalUpdater
+from model.updater import ConditionalGANUpdater
 
 from visualize import log_tensorboard
 from tb_chainer import utils, SummaryWriter
@@ -74,6 +74,8 @@ def main():
     print('# n_filters_idis: {}'.format(n_filters_idis))
     print('# n_filters_vdis: {}'.format(n_filters_vdis))
     print('# use_noise: {}'.format(use_noise))
+    print('\nTraining configuration is above. Start training? [enter]')
+    sys.stdin.read(1)
     print('')
 
     # logging configurations
@@ -93,15 +95,18 @@ def main():
 
     # Set up models
     if args.use_label:
-        if args.conditional_model == "cGAN":
-            channel += 
-        if args.conditional_model == "infoGAN":
-        else:
-            raise NotImplementedError
+        # if args.conditional_model == "cGAN":
+        #     channel += 
+        # if args.conditional_model == "infoGAN":
+        # else:
+        #     raise NotImplementedError
 
-        image_gen = CategoricalImageGenerator(channel, n_filters_gen, video_length, dim_zc, dim_zm, num_labels)
-        image_dis = CategoricalImageDiscriminator(channel, n_filters_gen, use_noise, noise_sigma)
-        video_dis = CategoricalVideoDiscriminator(channel, n_filters_gen, num_labels, use_noise, noise_sigma)
+        image_gen = ConditionalImageGenerator(channel, n_filters_gen, \
+                                              video_length, dim_zc, dim_zm, num_labels)
+        image_dis = ConditionalImageDiscriminator(channel, 1, n_filters_idis, \
+                                                  use_noise, noise_sigma)
+        video_dis = ConditionalVideoDiscriminator(channel+num_labels, 1, n_filters_vdis, \
+                                                  use_noise, noise_sigma)
     else:
         image_gen = ImageGenerator(channel, n_filters_gen, T=video_length, dim_zc = dim_zc, dim_zm = dim_zm)
         image_dis = ImageDiscriminator(channel, n_filters_gen, use_noise, noise_sigma)
@@ -122,7 +127,7 @@ def main():
 
     # Setup updater
     if args.use_label:
-        updater = CategoricalUpdater(
+        updater = ConditionalGANUpdater(
             models=(image_gen, image_dis, video_dis),
             video_length=video_length,
             img_size=size,
