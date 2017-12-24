@@ -58,24 +58,24 @@ def main():
 
     n_filters_gen  = 64
     n_filters_idis = 64
-    n_filters_vdis = 16
+    n_filters_vdis = 64
 
     use_noise = True
     noise_sigma = 0.1
-
-    # print('*** updater_svc ***')
-    print('*** updater ***')
-    print('GPU: {}'.format(args.gpu))
-    print('# Minibatch-size: {}'.format(args.batchsize))
-    print('# epoch: {}'.format(args.max_epoch))
 
     # Set up dataset
     train_dataset = MugDataset(args.dataset, video_length)
     # train_dataset = MovingMnistDataset(args.dataset, T)
     train_iter = chainer.iterators.SerialIterator(train_dataset, args.batchsize)
+
+    # print('*** updater_svc ***')
+    print('*** updater ***')
+    print('GPU: {}'.format(args.gpu))
+    print('# minibatch size: {}'.format(args.batchsize))
+    print('# max epoch: {}'.format(args.max_epoch))
+    print('# num batches: {}'.format(len(train_dataset) // args.batchsize))
     print('# data size: {}'.format(len(train_dataset)))
     print('# data shape: {}'.format(train_dataset[0][0].shape))
-    print('# num batches: {}'.format(len(train_dataset) // args.batchsize))
     print('# num filters gen: {}'.format(n_filters_gen))
     print('# num filters idis: {}'.format(n_filters_idis))
     print('# num filters vdis: {}'.format(n_filters_vdis))

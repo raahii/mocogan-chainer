@@ -200,7 +200,6 @@ class CategoricalImageGenerator(chainer.Chain):
         super(CategoricalImageGenerator, self).__init__()
         
         self.out_ch = out_channels
-        self.n_filters = n_filters
         self.video_len = video_len
         self.dim_zc = dim_zc
         self.dim_zm = dim_zm
@@ -278,13 +277,13 @@ class CategoricalImageDiscriminator(chainer.Chain):
             self.dc1 = L.Convolution2D(in_channels,    n_filters, 4, stride=2, pad=1, initialW=w)
             self.dc2 = L.Convolution2D(  n_filters,  n_filters*2, 4, stride=2, pad=1, initialW=w)
             self.dc3 = L.Convolution2D(n_filters*2,  n_filters*4, 4, stride=2, pad=1, initialW=w)
-            # self.dc4 = L.Convolution2D(n_filters*4, out_channels, 4, stride=2, pad=1, initialW=w)
-            self.dc4 = L.Convolution2D(n_filters*4,  n_filters*8, 4, stride=2, pad=1, initialW=w)
-            self.dc5 = L.Convolution2D(n_filters*8, out_channels, 4, stride=1, pad=0, initialW=w)
+            self.dc4 = L.Convolution2D(n_filters*4,            1, 4, stride=2, pad=1, initialW=w)
+            # self.dc4 = L.Convolution2D(n_filters*4,  n_filters*8, 4, stride=2, pad=1, initialW=w)
+            # self.dc5 = L.Convolution2D(n_filters*8, out_channels, 4, stride=1, pad=0, initialW=w)
 
             self.bn2 = L.BatchNormalization(n_filters*2)
             self.bn3 = L.BatchNormalization(n_filters*4)
-            self.bn4 = L.BatchNormalization(n_filters*8)
+            # self.bn4 = L.BatchNormalization(n_filters*8)
 
 class CategoricalVideoDiscriminator(chainer.Chain):
     def __init__(self, in_channels=3, out_channels=1, n_filters=64, \
@@ -377,11 +376,15 @@ class ConditionalImageDiscriminator(CategoricalImageDiscriminator):
         y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
 
         y = add_noise(y, self.use_noise, self.noise_sigma)
-        y = self.dc4(y)
+        with name_scope('idis_dc4', self.dc4.params()):
+            y = self.dc4(y)
 
-        # with name_scope('conv4', self.dc4.params()):
+        # y = add_noise(y, self.use_noise, self.noise_sigma)
+        # with name_scope('idis_dc4', self.dc4.params()):
         #     y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
-        # with name_scope('conv5', self.dc5.params()):
+        #
+        # y = add_noise(y, self.use_noise, self.noise_sigma)
+        # with name_scope('idis_dc5', self.dc5.params()):
         #     y = self.dc5(y)
 
         return y
@@ -449,11 +452,16 @@ class InfoImageGenerator(CategoricalImageGenerator):
         z = F.reshape(z, (self.video_len*batchsize, self.n_hidden, 1, 1))
         
         # G([zc, zm, zl])
-        x = F.relu(self.bn1(self.dc1(z)))
-        x = F.relu(self.bn2(self.dc2(x)))
-        x = F.relu(self.bn3(self.dc3(x)))
-        x = F.relu(self.bn4(self.dc4(x)))
-        x = F.tanh(self.dc5(x))
+        with name_scope('gen_dc2', self.dc2.params()):
+            x = F.relu(self.bn1(self.dc1(z)))
+        with name_scope('gen_dc2', self.dc2.params()):
+            x = F.relu(self.bn2(self.dc2(x)))
+        with name_scope('gen_dc3', self.dc3.params()):
+            x = F.relu(self.bn3(self.dc3(x)))
+        with name_scope('gen_dc4', self.dc4.params()):
+            x = F.relu(self.bn4(self.dc4(x)))
+        with name_scope('gen_dc5', self.dc5.params()):
+            x = F.tanh(self.dc5(x))
         x = F.reshape(x, (self.video_len, batchsize, self.out_ch, 64, 64))
 
         return x, labels
@@ -469,22 +477,28 @@ class InfoImageDiscriminator(CategoricalImageDiscriminator):
         output shape: (batchsize, 1)
         """
         y = add_noise(x, self.use_noise, self.noise_sigma)
-        y = F.leaky_relu(self.dc1(y), slope=0.2)
+        with name_scope('idis_dc1', self.dc1.params()):
+            y = F.leaky_relu(self.dc1(y), slope=0.2)
 
         y = add_noise(y, self.use_noise, self.noise_sigma)
-        y = F.leaky_relu(self.bn2(self.dc2(y)), slope=0.2)
+        with name_scope('idis_dc2', self.dc2.params()):
+            y = F.leaky_relu(self.bn2(self.dc2(y)), slope=0.2)
 
         y = add_noise(y, self.use_noise, self.noise_sigma)
-        y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
+        with name_scope('idis_dc3', self.dc3.params()):
+            y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        with name_scope('idis_dc4', self.dc4.params()):
+            y = self.dc4(y)
 
         # y = add_noise(y, self.use_noise, self.noise_sigma)
-        # y = self.dc4(y)
-
-        y = add_noise(y, self.use_noise, self.noise_sigma)
-        y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
-
-        y = add_noise(y, self.use_noise, self.noise_sigma)
-        y = self.dc5(y)
+        # with name_scope('idis_dc4', self.dc4.params()):
+        #     y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
+        #
+        # y = add_noise(y, self.use_noise, self.noise_sigma)
+        # with name_scope('idis_dc5', self.dc5.params()):
+        #     y = self.dc5(y)
 
         return y
 
@@ -500,19 +514,24 @@ class InfoVideoDiscriminator(CategoricalVideoDiscriminator):
         """
 
         y = add_noise(x, self.use_noise, self.noise_sigma)
-        y = F.leaky_relu(self.dc1(y), slope=0.2)
+        with name_scope('vdis_dc1', self.dc1.params()):
+            y = F.leaky_relu(self.dc1(y), slope=0.2)
 
         y = add_noise(y, self.use_noise, self.noise_sigma)
-        y = F.leaky_relu(self.bn2(self.dc2(y)), slope=0.2)
+        with name_scope('vdis_dc2', self.dc2.params()):
+            y = F.leaky_relu(self.bn2(self.dc2(y)), slope=0.2)
 
         y = add_noise(y, self.use_noise, self.noise_sigma)
-        y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
+        with name_scope('vdis_dc3', self.dc3.params()):
+            y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
         
         y = add_noise(y, self.use_noise, self.noise_sigma)
-        y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
+        with name_scope('vdis_dc4', self.dc4.params()):
+            y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
 
         y = add_noise(y, self.use_noise, self.noise_sigma)
-        y = self.dc5(y)
+        with name_scope('vdis_dc5', self.dc5.params()):
+            y = self.dc5(y)
 
         return y
 #}}}

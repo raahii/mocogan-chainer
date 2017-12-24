@@ -212,8 +212,11 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
 
         chainer.report({'loss': loss}, dis)
         if self.is_new_epoch:
+            y_fake = y_fake[:,:,0,0,0]
             self.tf_writer.add_scalar('loss:video_discriminator', loss.data, self.epoch)
             self.tf_writer.add_graph([y_fake, y_real])
+            # self.tf_writer.add_all_variable_images([y_real, y_fake], pattern='.*vdis.*')
+            # self.tf_writer.add_all_parameter_histograms([y_real, y_fake], pattern='.*vdis.*')
 
         return loss
 
@@ -225,8 +228,12 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
 
         chainer.report({'loss': loss}, dis)
         if self.is_new_epoch:
+            y_fake = y_fake[:,0,0,0]
+            y_real = y_real[:,0,0,0]
             self.tf_writer.add_scalar('loss:image_discriminator', loss.data, self.epoch)
             self.tf_writer.add_graph([y_fake, y_real])
+            self.tf_writer.add_all_variable_images([y_real, y_fake], pattern='.*idis.*')
+            self.tf_writer.add_all_parameter_histograms([y_real, y_fake], pattern='.*idis.*')
 
         return loss
 
@@ -239,7 +246,11 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
         
         chainer.report({'loss': loss}, gen)
         if self.is_new_epoch:
+            y_fake_i = y_fake_i[:,0,0,0]
             self.tf_writer.add_scalar('loss:image_generator', loss.data, self.epoch)
+            self.tf_writer.add_graph([y_fake_i, y_fake_v])
+            # self.tf_writer.add_all_variable_images([y_fake_i], pattern='.*gen.*')
+            # self.tf_writer.add_all_parameter_histograms([y_fake_i], pattern='.*gen.*')
         
         return loss
 
