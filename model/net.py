@@ -278,13 +278,13 @@ class CategoricalImageDiscriminator(chainer.Chain):
             self.dc1 = L.Convolution2D(in_channels,    n_filters, 4, stride=2, pad=1, initialW=w)
             self.dc2 = L.Convolution2D(  n_filters,  n_filters*2, 4, stride=2, pad=1, initialW=w)
             self.dc3 = L.Convolution2D(n_filters*2,  n_filters*4, 4, stride=2, pad=1, initialW=w)
-            self.dc4 = L.Convolution2D(n_filters*4, out_channels, 4, stride=2, pad=1, initialW=w)
-            # self.dc4 = L.Convolution2D(n_filters*4,  n_filters*8, 4, stride=2, pad=1, initialW=w)
-            # self.dc5 = L.Convolution2D(n_filters*8, out_channels, 4, stride=1, pad=0, initialW=w)
+            # self.dc4 = L.Convolution2D(n_filters*4, out_channels, 4, stride=2, pad=1, initialW=w)
+            self.dc4 = L.Convolution2D(n_filters*4,  n_filters*8, 4, stride=2, pad=1, initialW=w)
+            self.dc5 = L.Convolution2D(n_filters*8, out_channels, 4, stride=1, pad=0, initialW=w)
 
             self.bn2 = L.BatchNormalization(n_filters*2)
             self.bn3 = L.BatchNormalization(n_filters*4)
-            # self.bn4 = L.BatchNormalization(n_filters*8)
+            self.bn4 = L.BatchNormalization(n_filters*8)
 
 class CategoricalVideoDiscriminator(chainer.Chain):
     def __init__(self, in_channels=3, out_channels=1, n_filters=64, \
@@ -310,6 +310,7 @@ class CategoricalVideoDiscriminator(chainer.Chain):
 # }}}
 
 # cGAN model set
+#{{{
 class ConditionalImageGenerator(CategoricalImageGenerator):
     def __init__(self, *args, **kwargs):
         super(ConditionalImageGenerator, self).__init__(*args, **kwargs)
@@ -412,6 +413,109 @@ class ConditionalVideoDiscriminator(CategoricalVideoDiscriminator):
         y = self.dc5(y)
 
         return y
+#}}}
+
+# infoGAN model set
+# {{{
+class InfoImageGenerator(CategoricalImageGenerator):
+    def __init__(self, *args, **kwargs):
+        super(InfoImageGenerator, self).__init__(*args, **kwargs)
+
+    @within_name_scope('conditional_igen')
+    def __call__(self, h0, zc=None, labels=None):
+        """
+        input h0 shape:  (batchsize, dim_zm)
+        input zc shape:  (batchsize, dim_zc)
+        output shape: (video_length, batchsize, channel, x, y, z)
+        """
+        batchsize = h0.shape[0]
+        xp = chainer.cuda.get_array_module(h0)
+        
+        # make [zc, zm, zl]
+        # z shape: (video_length, batchsize, channel)
+    
+        ## z_content
+        if zc is None:
+            zc = Variable(xp.asarray(self.make_zc(batchsize)))
+
+        ## z_motion
+        zm = self.make_zm(h0, batchsize)
+
+        ## z_label
+        zl, labels = self.make_zl(batchsize, labels)
+        zl = Variable(xp.asarray(zl))
+
+        z = F.concat((zc, zm, zl), axis=2)
+        z = F.reshape(z, (self.video_len*batchsize, self.n_hidden, 1, 1))
+        
+        # G([zc, zm, zl])
+        x = F.relu(self.bn1(self.dc1(z)))
+        x = F.relu(self.bn2(self.dc2(x)))
+        x = F.relu(self.bn3(self.dc3(x)))
+        x = F.relu(self.bn4(self.dc4(x)))
+        x = F.tanh(self.dc5(x))
+        x = F.reshape(x, (self.video_len, batchsize, self.out_ch, 64, 64))
+
+        return x, labels
+
+class InfoImageDiscriminator(CategoricalImageDiscriminator):
+    def __init__(self, *args, **kwargs):
+        super(InfoImageDiscriminator, self).__init__(*args, **kwargs)
+
+    @within_name_scope('conditional_idis')
+    def __call__(self, x):
+        """
+        input shape:  (batchsize, 3, 64, 64)
+        output shape: (batchsize, 1)
+        """
+        y = add_noise(x, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.dc1(y), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.bn2(self.dc2(y)), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
+
+        # y = add_noise(y, self.use_noise, self.noise_sigma)
+        # y = self.dc4(y)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        y = self.dc5(y)
+
+        return y
+
+class InfoVideoDiscriminator(CategoricalVideoDiscriminator):
+    def __init__(self, *args, **kwargs):
+        super(InfoVideoDiscriminator, self).__init__(*args, **kwargs)
+
+    @within_name_scope('conditional_vdis')
+    def __call__(self, x):
+        """
+        input shape:  (batchsize, ch, video_length, y, x)
+        output shape: (batchsize, )
+        """
+
+        y = add_noise(x, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.dc1(y), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.bn2(self.dc2(y)), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
+        
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        y = self.dc5(y)
+
+        return y
+#}}}
 
 if __name__ ==  "__main__":
     main()

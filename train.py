@@ -9,14 +9,21 @@ from chainer.training import extensions
 
 from datasets import MugDataset, MovingMnistDataset
 
+# normal gan
 from model.net import ImageGenerator
 from model.net import ImageDiscriminator
 from model.net import VideoDiscriminator
+from model.updater import NormalUpdater
+# cgan
 from model.net import ConditionalImageGenerator
 from model.net import ConditionalImageDiscriminator
 from model.net import ConditionalVideoDiscriminator
-from model.updater import NormalUpdater
 from model.updater import ConditionalGANUpdater
+# infogan
+from model.net import InfoImageGenerator
+from model.net import InfoImageDiscriminator
+from model.net import InfoVideoDiscriminator
+from model.updater import InfoGANUpdater
 
 from visualize import log_tensorboard
 from tb_chainer import utils, SummaryWriter
@@ -29,7 +36,7 @@ def main():
     parser.add_argument('--batchsize', type=int, default=200)
     parser.add_argument('--max_epoch', type=int, default=1000)
     parser.add_argument('--use_label', action='store_true')
-    parser.add_argument('--conditional_model', '-c',  type=str, default="cGAN")
+    parser.add_argument('--categorical_model', '-c',  type=str, default="cGAN")
     parser.add_argument('--save_dirname', default=None)
     parser.add_argument('--display_interval', type=int, default=1, help='Interval of displaying log to console')
     parser.add_argument('--snapshot_interval', type=int, default=10, help='Interval of snapshot')
@@ -66,14 +73,15 @@ def main():
     train_dataset = MugDataset(args.dataset, video_length)
     # train_dataset = MovingMnistDataset(args.dataset, T)
     train_iter = chainer.iterators.SerialIterator(train_dataset, args.batchsize)
-    print('# data-size: {}'.format(len(train_dataset)))
-    print('# data-shape: {}'.format(train_dataset[0][0].shape))
-    print('# num-batches: {}'.format(len(train_dataset) // args.batchsize))
-    print('# use_label: {}'.format(args.use_label))
-    print('# n_filters_gen: {}'.format(n_filters_gen))
-    print('# n_filters_idis: {}'.format(n_filters_idis))
-    print('# n_filters_vdis: {}'.format(n_filters_vdis))
-    print('# use_noise: {}'.format(use_noise))
+    print('# data size: {}'.format(len(train_dataset)))
+    print('# data shape: {}'.format(train_dataset[0][0].shape))
+    print('# num batches: {}'.format(len(train_dataset) // args.batchsize))
+    print('# num filters gen: {}'.format(n_filters_gen))
+    print('# num filters idis: {}'.format(n_filters_idis))
+    print('# num filters vdis: {}'.format(n_filters_vdis))
+    print('# use noise: {}'.format(use_noise))
+    print('# use label: {}'.format(args.use_label))
+    print('# categorical model: {}'.format(args.categorical_model))
     print('\nTraining configuration is above. Start training? [enter]')
     sys.stdin.read(1)
     print('')
@@ -95,18 +103,23 @@ def main():
 
     # Set up models
     if args.use_label:
-        # if args.conditional_model == "cGAN":
-        #     channel += 
-        # if args.conditional_model == "infoGAN":
-        # else:
-        #     raise NotImplementedError
+        if args.categorical_model == "cGAN":
+            image_gen = ConditionalImageGenerator(channel, n_filters_gen, \
+                                                  video_length, dim_zc, dim_zm, num_labels)
+            image_dis = ConditionalImageDiscriminator(channel, 1, n_filters_idis, \
+                                                      use_noise, noise_sigma)
+            video_dis = ConditionalVideoDiscriminator(channel+num_labels, 1, n_filters_vdis, \
+                                                      use_noise, noise_sigma)
+        elif args.categorical_model == "infoGAN":
+            image_gen = InfoImageGenerator(channel, n_filters_gen, \
+                                           video_length, dim_zc, dim_zm, num_labels)
+            image_dis = InfoImageDiscriminator(channel, 1, n_filters_idis, \
+                                               use_noise, noise_sigma)
+            video_dis = InfoVideoDiscriminator(channel, num_labels+1, n_filters_vdis, \
+                                                      use_noise, noise_sigma)
+        else:
+            raise NotImplementedError
 
-        image_gen = ConditionalImageGenerator(channel, n_filters_gen, \
-                                              video_length, dim_zc, dim_zm, num_labels)
-        image_dis = ConditionalImageDiscriminator(channel, 1, n_filters_idis, \
-                                                  use_noise, noise_sigma)
-        video_dis = ConditionalVideoDiscriminator(channel+num_labels, 1, n_filters_vdis, \
-                                                  use_noise, noise_sigma)
     else:
         image_gen = ImageGenerator(channel, n_filters_gen, T=video_length, dim_zc = dim_zc, dim_zm = dim_zm)
         image_dis = ImageDiscriminator(channel, n_filters_gen, use_noise, noise_sigma)
@@ -127,19 +140,36 @@ def main():
 
     # Setup updater
     if args.use_label:
-        updater = ConditionalGANUpdater(
-            models=(image_gen, image_dis, video_dis),
-            video_length=video_length,
-            img_size=size,
-            channel=channel,
-            iterator=train_iter,
-            tensorboard_writer=writer,
-            optimizer={
-                'image_gen': opt_image_gen,
-                'image_dis': opt_image_dis,
-                'video_dis': opt_video_dis,
-            },
-            device=args.gpu)
+        if args.categorical_model == "cGAN":
+            updater = ConditionalGANUpdater(
+                models=(image_gen, image_dis, video_dis),
+                video_length=video_length,
+                img_size=size,
+                channel=channel,
+                iterator=train_iter,
+                tensorboard_writer=writer,
+                optimizer={
+                    'image_gen': opt_image_gen,
+                    'image_dis': opt_image_dis,
+                    'video_dis': opt_video_dis,
+                },
+                device=args.gpu)
+        elif args.categorical_model == "infoGAN":
+            updater = InfoGANUpdater(
+                models=(image_gen, image_dis, video_dis),
+                video_length=video_length,
+                img_size=size,
+                channel=channel,
+                iterator=train_iter,
+                tensorboard_writer=writer,
+                optimizer={
+                    'image_gen': opt_image_gen,
+                    'image_dis': opt_image_dis,
+                    'video_dis': opt_video_dis,
+                },
+                device=args.gpu)
+        else:
+            raise NotImplementedError
     else:
         updater = NormalUpdater(
             models=(image_gen, image_dis, video_dis),

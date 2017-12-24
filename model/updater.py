@@ -197,14 +197,18 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
         self.img_size = kwargs.pop('img_size')
         self.channel  = kwargs.pop('channel')
         self.tf_writer = kwargs.pop('tensorboard_writer')
-        super(CategoricalUpdater, self).__init__(*args, **kwargs)
+        super(InfoGANUpdater, self).__init__(*args, **kwargs)
     
-    def loss_vdis(self, dis, y_fake, y_real):
+    def loss_vdis(self, dis, y_fake, t_fake, y_real, t_real):
         batchsize = len(y_fake)
-
+        
         # gan criterion
-        loss = F.sum(F.softplus(-y_real)) / batchsize
-        loss += F.sum(F.softplus(y_fake)) / batchsize
+        loss = F.sum(F.softplus(-y_real[:, 0])) / batchsize
+        loss += F.sum(F.softplus(y_fake[:,0])) / batchsize
+
+        # categorical criterion
+        loss += F.softmax_cross_entropy(y_real[:, 1:, 0, 0, 0], t_real)
+        loss += F.softmax_cross_entropy(y_fake[:, 1:, 0, 0, 0], t_fake)
 
         chainer.report({'loss': loss}, dis)
         if self.is_new_epoch:
@@ -228,15 +232,15 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
 
     def loss_gen(self, gen, y_fake_i, y_fake_v):
         batchsize = len(y_fake_i)
-
+        
         # gan criterion
         loss = F.sum(F.softplus(-y_fake_i)) / batchsize
         loss += F.sum(F.softplus(-y_fake_v)) / batchsize
-
+        
         chainer.report({'loss': loss}, gen)
         if self.is_new_epoch:
             self.tf_writer.add_scalar('loss:image_generator', loss.data, self.epoch)
-
+        
         return loss
 
     def update_core(self):
@@ -246,26 +250,28 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
         video_dis_optimizer = self.get_optimizer('video_dis')
         image_gen            = self.image_gen
         image_dis, video_dis = self.image_dis, self.video_dis
-            
+        
         ## real data
         batch = self.get_iterator('main').next()
         batchsize = len(batch)
         x_real, t_real = concat_examples(batch)
         x_real = Variable(self.converter(x_real, self.device))
         xp = chainer.cuda.get_array_module(x_real.data)
+        t_real = xp.asarray(t_real)
         y_real_i = image_dis(x_real[:,0:self.channel,xp.random.randint(0, self.T)])
-        y_real_v = video_dis(x_real)
-
+        y_real_v = video_dis(x_real[:,0:self.channel])
+        
         ## fake data
         h0 = Variable(xp.asarray(image_gen.make_h0(batchsize)))
         x_fake, t_fake = image_gen(h0)
         # (t, bs, c, y, x) -> (bs, c, t, y, x)
-        x_fake = x_fake.transpose(1, 2, 0, 3, 4)
+        x_fake   = x_fake.transpose(1, 2, 0, 3, 4)
+        t_fake   = xp.asarray(t_fake)
         y_fake_i = image_dis(x_fake[:,0:self.channel,xp.random.randint(0, self.T)])
-        y_fake_v = video_dis(x_fake)
+        y_fake_v = video_dis(x_fake[:,0:self.channel])
         
         ## update
         image_dis_optimizer.update(self.loss_idis, image_dis, y_fake_i, y_real_i)
-        video_dis_optimizer.update(self.loss_vdis, video_dis, y_fake_v, y_real_v)
-        image_gen_optimizer.update(self.loss_gen, image_gen, y_fake_i, y_fake_v)
+        video_dis_optimizer.update(self.loss_vdis, video_dis, y_fake_v, t_fake, y_real_v, t_fake)
+        image_gen_optimizer.update(self.loss_gen,  image_gen, y_fake_i, y_fake_v)
 
