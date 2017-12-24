@@ -120,10 +120,10 @@ def log_tensorboard(image_gen, num, use_labels, seed, writer, save_path):
                 writer.add_image('{:02d}'.format(t), grid_videos[t,0:3] / 255., updater.epoch)
             
             # save video to directory
-            grid_videos = grid_videos.transpose(0, 2, 3, 1)
-            save_dir = os.path.join(save_path, 'samples')
-            basename = 'epoch_{:04d}'.format(updater.epoch)
-            sub_save_dir = os.path.join(save_dir, basename)
-            os.makedirs(sub_save_dir, exist_ok=True)
-            save_grid_video(grid_videos, save_dir, basename, sub_save_dir)
+            # grid_videos = grid_videos.transpose(0, 2, 3, 1)
+            # save_dir = os.path.join(save_path, 'samples')
+            # basename = 'epoch_{:04d}'.format(updater.epoch)
+            # sub_save_dir = os.path.join(save_dir, basename)
+            # os.makedirs(sub_save_dir, exist_ok=True)
+            # save_grid_video(grid_videos, save_dir, basename, sub_save_dir)
     return log

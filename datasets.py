@@ -11,13 +11,13 @@ def frame_number(name):
     match = re.search(frame_name_regex, name)
     return match.group(1)
 
-def read_images(paths):
+def read_video(paths):
     video = []
     for path in paths:
         f = Image.open(path)
         try:
-            image = np.asarray(f, dtype=np.float32)
-            video.append(image)
+            frame = np.asarray(f, dtype=np.float32)
+            video.append(frame)
         finally:
             if hasattr(f, 'close'):
                 f.close()
@@ -46,7 +46,6 @@ class MugDataset(chainer.dataset.DatasetMixin):
         video_path, categ = self.videos[i]
 
         frame_paths = sorted(glob.glob(os.path.join(video_path, '*.jpg')), key=frame_number)
-        frame_paths = np.array(frame_paths)
 
         # videos can be of various length, we randomly sample sub-sequences
         if len(frame_paths) < self.video_length:
@@ -54,11 +53,12 @@ class MugDataset(chainer.dataset.DatasetMixin):
                 .format(len(frame_paths), self.video_length))
 
         # read video
-        video = read_images(frame_paths)
+        video = read_video(frame_paths)
         if len(video.shape) != 4:
-            raise ValueError('invalid video.shape')
+            raise ValueError('invalid video shape: {}'.format(video.shape))
+        video = (video - 128.) / 128.
 
-        # label data
+        # concat label data as feature maps
         t, y, x, c = video.shape 
         label_video = -1.0 * np.ones((t, y, x, self.num_labels), dtype=np.float32)
 
@@ -68,7 +68,7 @@ class MugDataset(chainer.dataset.DatasetMixin):
         video = np.concatenate((video, label_video), axis=3)
         video = video.transpose(3, 0, 1, 2) # (ch, video_len, y, x)
         
-        return (video - 128.) / 128., categ
+        return video, categ
 
 class MovingMnistDataset(chainer.dataset.DatasetMixin):
     def __init__(self, npz_path, video_length=16):

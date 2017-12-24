@@ -8,9 +8,9 @@ import chainer.links as L
 from chainer import Variable
 from tb_chainer import name_scope, within_name_scope
 
-def add_noise(x, sigma):
+def add_noise(x, use_noise, sigma):
     xp = chainer.cuda.get_array_module(x.data)
-    if chainer.config.train:
+    if chainer.config.train and use_noise:
         return x + sigma * xp.random.randn(*x.shape)
     else:
         return x
@@ -18,10 +18,10 @@ def add_noise(x, sigma):
 # Normal model set
 #{{{
 class ImageGenerator(chainer.Chain):
-    def __init__(self, channel=3, T=16, dim_zc=50, dim_zm=10):
+    def __init__(self, num_channels=3, T=16, dim_zc=50, dim_zm=10):
         super(ImageGenerator, self).__init__()
         
-        self.ch = channel
+        self.ch = num_channels
         self.dim_zc = dim_zc
         self.dim_zm = dim_zm
         self.T = T
@@ -31,7 +31,7 @@ class ImageGenerator(chainer.Chain):
             n_hidden = self.n_hidden
             ndf = 64
 
-            w = chainer.initializers.HeNormal()
+            w = chainer.initializers.GlorotNormal()
             
             # Rm
             self.g0 = L.StatelessGRU(self.dim_zm, self.dim_zm, 0.2)
@@ -41,7 +41,7 @@ class ImageGenerator(chainer.Chain):
             self.dc2 = L.DeconvolutionND(2,    ndf*8,   ndf*4, 4, stride=2, pad=1, initialW=w)
             self.dc3 = L.DeconvolutionND(2,    ndf*4,   ndf*2, 4, stride=2, pad=1, initialW=w)
             self.dc4 = L.DeconvolutionND(2,    ndf*2,     ndf, 4, stride=2, pad=1, initialW=w)
-            self.dc5 = L.DeconvolutionND(2,      ndf, channel, 4, stride=2, pad=1, initialW=w)
+            self.dc5 = L.DeconvolutionND(2,      ndf, num_channels, 4, stride=2, pad=1, initialW=w)
 
             self.bn1 = L.BatchNormalization(ndf*8)
             self.bn2 = L.BatchNormalization(ndf*4)
@@ -58,17 +58,13 @@ class ImageGenerator(chainer.Chain):
         """ make zm vectors """
         xp = chainer.cuda.get_array_module(h0)
 
-        ht = h0
-        zm = Variable()
+        ht = [h0]
         for t in range(self.T):
-            e = Variable(xp.asarray(self.make_hidden(batchsize, self.dim_zm)))
-            zm_t = self.g0(ht, e)
-            ht = zm_t # use zm_t as next hidden vector
-
-            if t == 0:
-                zm = F.reshape(zm_t, (1, batchsize, self.dim_zm))
-            else:
-                zm = F.concat((zm, F.reshape(zm_t, (1, batchsize, self.dim_zm))), axis=0)
+            et = Variable(xp.asarray(self.make_hidden(batchsize, self.dim_zm)))
+            ht.append(self.g0(ht[-1], et))
+        
+        zmt = [hk.reshape(1, batchsize, self.dim_zm) for hk in ht]
+        zm = F.concat(zmt[1:], axis=0)
 
         return zm
 
@@ -115,7 +111,7 @@ class ImageDiscriminator(chainer.Chain):
         self.ch          = channel
 
         with self.init_scope():
-            w = chainer.initializers.HeNormal()
+            w = chainer.initializers.GlortNormal()
 
             ndf = 96
 
@@ -159,7 +155,7 @@ class VideoDiscriminator(chainer.Chain):
         self.noise_sigma = noise_sigma
 
         with self.init_scope():
-            w = chainer.initializers.HeNormal()
+            w = chainer.initializers.GlorotNormal()
 
             ndf = 64
             
@@ -199,10 +195,10 @@ class VideoDiscriminator(chainer.Chain):
 # Categorical model set
 # {{{
 class CategoricalImageGenerator(chainer.Chain):
-    def __init__(self, channel=3, T=16, dim_zc=50, dim_zm=10, num_labels=6):
+    def __init__(self, num_channels=3, num_filters=64, T=16, dim_zc=50, dim_zm=10, num_labels=6):
         super(CategoricalImageGenerator, self).__init__()
         
-        self.ch = channel
+        self.ch = num_channels
         self.dim_zc = dim_zc
         self.dim_zm = dim_zm
         self.num_labels = num_labels
@@ -210,25 +206,24 @@ class CategoricalImageGenerator(chainer.Chain):
         self.n_hidden = dim_zc + dim_zm + num_labels
 
         with self.init_scope():
-            ndf = 64
             n_hidden = self.n_hidden
 
-            w = chainer.initializers.HeNormal()
+            w = chainer.initializers.GlorotNormal()
             
             # Rm
             self.g0 = L.StatelessGRU(self.dim_zm, self.dim_zm, 0.2)
             
             # G
-            self.dc1 = L.DeconvolutionND(2, n_hidden,   ndf*8, 4, stride=1, pad=0, initialW=w)
-            self.dc2 = L.DeconvolutionND(2,    ndf*8,   ndf*4, 4, stride=2, pad=1, initialW=w)
-            self.dc3 = L.DeconvolutionND(2,    ndf*4,   ndf*2, 4, stride=2, pad=1, initialW=w)
-            self.dc4 = L.DeconvolutionND(2,    ndf*2,     ndf, 4, stride=2, pad=1, initialW=w)
-            self.dc5 = L.DeconvolutionND(2,      ndf, channel, 4, stride=2, pad=1, initialW=w)
+            self.dc1 = L.Deconvolution2D(     n_hidden, num_filters*8, 4, stride=1, pad=0, initialW=w)
+            self.dc2 = L.Deconvolution2D(num_filters*8, num_filters*4, 4, stride=2, pad=1, initialW=w)
+            self.dc3 = L.Deconvolution2D(num_filters*4, num_filters*2, 4, stride=2, pad=1, initialW=w)
+            self.dc4 = L.Deconvolution2D(num_filters*2,   num_filters, 4, stride=2, pad=1, initialW=w)
+            self.dc5 = L.Deconvolution2D(  num_filters,  num_channels, 4, stride=2, pad=1, initialW=w)
 
-            self.bn1 = L.BatchNormalization(ndf*8)
-            self.bn2 = L.BatchNormalization(ndf*4)
-            self.bn3 = L.BatchNormalization(ndf*2)
-            self.bn4 = L.BatchNormalization(ndf)
+            self.bn1 = L.BatchNormalization(num_filters*8)
+            self.bn2 = L.BatchNormalization(num_filters*4)
+            self.bn3 = L.BatchNormalization(num_filters*2)
+            self.bn4 = L.BatchNormalization(num_filters)
 
     def make_hidden(self, batchsize, size):
         return np.random.normal(0, 0.33, size=[batchsize, size]).astype(np.float32)
@@ -257,17 +252,13 @@ class CategoricalImageGenerator(chainer.Chain):
         """ make zm vectors """
         xp = chainer.cuda.get_array_module(h0)
 
-        ht = h0
-        zm = Variable()
+        ht = [h0]
         for t in range(self.T):
-            e = Variable(xp.asarray(self.make_hidden(batchsize, self.dim_zm)))
-            zm_t = self.g0(ht, e)
-            ht = zm_t # use zm_t as next hidden vector
-
-            if t == 0:
-                zm = F.reshape(zm_t, (1, batchsize, self.dim_zm))
-            else:
-                zm = F.concat((zm, F.reshape(zm_t, (1, batchsize, self.dim_zm))), axis=0)
+            et = Variable(xp.asarray(self.make_hidden(batchsize, self.dim_zm)))
+            ht.append(self.g0(ht[-1], et))
+        
+        zmt = [hk.reshape(1, batchsize, self.dim_zm) for hk in ht]
+        zm = F.concat(zmt[1:], axis=0)
 
         return zm
 
@@ -295,7 +286,7 @@ class CategoricalImageGenerator(chainer.Chain):
         zl, labels = self.make_zl(batchsize, labels)
         zl = Variable(xp.asarray(zl))
 
-        z = F.concat((zc, zl, zm), axis=2)
+        z = F.concat((zc, zm, zl), axis=2)
         z = F.reshape(z, (self.T*batchsize, self.n_hidden, 1, 1))
         
         # G([zc, zm, zl])
@@ -306,7 +297,7 @@ class CategoricalImageGenerator(chainer.Chain):
         x = F.tanh(self.dc5(x))
         x = F.reshape(x, (self.T, batchsize, self.ch, 64, 64))
         
-        # concat label as additional feature map for discriminator
+        # concat label info as additional feature maps
         label_video = -1.0 * xp.ones((self.T, batchsize, self.num_labels, 64, 64), dtype=np.float32)
         label_video[:,np.arange(batchsize), labels] = 1.
         x = F.concat((x, label_video), axis=2)
@@ -314,7 +305,7 @@ class CategoricalImageGenerator(chainer.Chain):
         return x, labels
 
 class CategoricalImageDiscriminator(chainer.Chain):
-    def __init__(self, channel=3, use_noise=False, noise_sigma=0.2):
+    def __init__(self, channel=3, num_filters=64, use_noise=False, noise_sigma=0.1):
         super(CategoricalImageDiscriminator, self).__init__()
 
         self.use_noise   = use_noise
@@ -322,19 +313,18 @@ class CategoricalImageDiscriminator(chainer.Chain):
         self.ch          = channel
 
         with self.init_scope():
-            w = chainer.initializers.HeNormal()
+            w = chainer.initializers.GlorotNormal()
 
-            ndf = 96
+            self.dc1 = L.Convolution2D(      channel,   num_filters, 4, stride=2, pad=1, initialW=w)
+            self.dc2 = L.Convolution2D(  num_filters, num_filters*2, 4, stride=2, pad=1, initialW=w)
+            self.dc3 = L.Convolution2D(num_filters*2, num_filters*4, 4, stride=2, pad=1, initialW=w)
+            self.dc4 = L.Convolution2D(num_filters*4,             1, 4, stride=2, pad=1, initialW=w)
+            # self.dc4 = L.Convolution2D(num_filters*4, num_filters*8, 4, stride=2, pad=1, initialW=w)
+            # self.dc5 = L.Convolution2D(num_filters*8,     1, 4, stride=1, pad=0, initialW=w)
 
-            self.dc1 = L.Convolution2D(channel,   ndf, 4, stride=2, pad=1, initialW=w)
-            self.dc2 = L.Convolution2D(    ndf, ndf*2, 4, stride=2, pad=1, initialW=w)
-            self.dc3 = L.Convolution2D(  ndf*2, ndf*4, 4, stride=2, pad=1, initialW=w)
-            self.dc4 = L.Convolution2D(  ndf*4, ndf*8, 4, stride=2, pad=1, initialW=w)
-            self.dc5 = L.Convolution2D(  ndf*8,     1, 4, stride=1, pad=0, initialW=w)
-
-            self.bn2 = L.BatchNormalization(ndf*2)
-            self.bn3 = L.BatchNormalization(ndf*4)
-            self.bn4 = L.BatchNormalization(ndf*8)
+            self.bn2 = L.BatchNormalization(num_filters*2)
+            self.bn3 = L.BatchNormalization(num_filters*4)
+            # self.bn4 = L.BatchNormalization(num_filters*8)
 
     @within_name_scope('categ_image_dis')
     def __call__(self, x):
@@ -342,43 +332,44 @@ class CategoricalImageDiscriminator(chainer.Chain):
         input shape:  (batchsize, 3, 64, 64)
         output shape: (batchsize, 1)
         """
-        if self.use_noise:
-            x = add_noise(x, self.noise_sigma)
+        y = add_noise(x, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.dc1(y), slope=0.2)
 
-        with name_scope('conv1', self.dc1.params()):
-            y = F.leaky_relu(self.dc1(x), slope=0.2)
-        with name_scope('conv2', self.dc2.params()):
-            y = F.leaky_relu(self.bn2(self.dc2(y)), slope=0.2)
-        with name_scope('conv3', self.dc3.params()):
-            y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
-        with name_scope('conv4', self.dc4.params()):
-            y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
-        with name_scope('conv5', self.dc5.params()):
-            y = self.dc5(y)
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.bn2(self.dc2(y)), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        y = self.dc4(y)
+
+        # with name_scope('conv4', self.dc4.params()):
+        #     y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
+        # with name_scope('conv5', self.dc5.params()):
+        #     y = self.dc5(y)
 
         return y
 
 class CategoricalVideoDiscriminator(chainer.Chain):
-    def __init__(self, channel=3, num_labels=6, use_noise=False, noise_sigma=0.2):
+    def __init__(self, channel=3, num_filters=64, num_labels=6, use_noise=False, noise_sigma=0.1):
         super(CategoricalVideoDiscriminator, self).__init__()
 
         self.use_noise   = use_noise
         self.noise_sigma = noise_sigma
 
         with self.init_scope():
-            w = chainer.initializers.HeNormal()
+            w = chainer.initializers.GlorotNormal()
 
-            ndf = 64
-            
-            self.dc1 = L.ConvolutionND(3, channel+num_labels,   ndf, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc2 = L.ConvolutionND(3,     ndf, ndf*2, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc3 = L.ConvolutionND(3,   ndf*2, ndf*4, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc4 = L.ConvolutionND(3,   ndf*4, ndf*8, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc5 = L.ConvolutionND(3,   ndf*8, num_labels+1, 4, stride=(1,3,3), pad=(0,0,0), initialW=w)
+            self.dc1 = L.ConvolutionND(3, channel+num_labels,   num_filters, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
+            self.dc2 = L.ConvolutionND(3,        num_filters, num_filters*2, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
+            self.dc3 = L.ConvolutionND(3,      num_filters*2, num_filters*4, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
+            self.dc4 = L.ConvolutionND(3,      num_filters*4, num_filters*8, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
+            self.dc5 = L.ConvolutionND(3,      num_filters*8,             1, 4, stride=(1,1,1), pad=(0,0,0), initialW=w)
 
-            self.bn2 = L.BatchNormalization(ndf*2)
-            self.bn3 = L.BatchNormalization(ndf*4)
-            self.bn4 = L.BatchNormalization(ndf*8)
+            self.bn2 = L.BatchNormalization(num_filters*2)
+            self.bn3 = L.BatchNormalization(num_filters*4)
+            self.bn4 = L.BatchNormalization(num_filters*8)
 
     @within_name_scope('categ_video_dis')
     def __call__(self, x):
@@ -386,13 +377,19 @@ class CategoricalVideoDiscriminator(chainer.Chain):
         input shape:  (batchsize, ch, video_length, y, x)
         output shape: (batchsize, )
         """
-        if self.use_noise:
-            x = add_noise(x, self.noise_sigma)
+        y = add_noise(x, self.use_noise, self.noise_sigma)
+        y = F.leaky_relu(self.dc1(y), slope=0.2)
 
-        y = F.leaky_relu(self.dc1(x), slope=0.2)
+        y = add_noise(y, self.use_noise, self.noise_sigma)
         y = F.leaky_relu(self.bn2(self.dc2(y)), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
         y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
+        
+        y = add_noise(y, self.use_noise, self.noise_sigma)
         y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
         y = self.dc5(y)
 
         return y

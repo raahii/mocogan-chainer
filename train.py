@@ -29,6 +29,7 @@ def main():
     parser.add_argument('--batchsize', type=int, default=200)
     parser.add_argument('--max_epoch', type=int, default=1000)
     parser.add_argument('--use_label', action='store_true')
+    parser.add_argument('--conditional_model', '-c',  type=str, default="cGAN")
     parser.add_argument('--save_dirname', default=None)
     parser.add_argument('--display_interval', type=int, default=1, help='Interval of displaying log to console')
     parser.add_argument('--snapshot_interval', type=int, default=10, help='Interval of snapshot')
@@ -48,6 +49,13 @@ def main():
     n_hidden     = dim_zc + dim_zm
     num_labels   = 6
 
+    n_filters_gen  = 64
+    n_filters_idis = 64
+    n_filters_vdis = 16
+
+    use_noise = True
+    noise_sigma = 0.1
+
     # print('*** updater_svc ***')
     print('*** updater ***')
     print('GPU: {}'.format(args.gpu))
@@ -62,6 +70,10 @@ def main():
     print('# data-shape: {}'.format(train_dataset[0][0].shape))
     print('# num-batches: {}'.format(len(train_dataset) // args.batchsize))
     print('# use_label: {}'.format(args.use_label))
+    print('# n_filters_gen: {}'.format(n_filters_gen))
+    print('# n_filters_idis: {}'.format(n_filters_idis))
+    print('# n_filters_vdis: {}'.format(n_filters_vdis))
+    print('# use_noise: {}'.format(use_noise))
     print('')
 
     # logging configurations
@@ -81,13 +93,19 @@ def main():
 
     # Set up models
     if args.use_label:
-        image_gen = CategoricalImageGenerator(channel, video_length, dim_zc, dim_zm, num_labels)
-        image_dis = CategoricalImageDiscriminator(channel)
-        video_dis = CategoricalVideoDiscriminator(channel, num_labels)
+        if args.conditional_model == "cGAN":
+            channel += 
+        if args.conditional_model == "infoGAN":
+        else:
+            raise NotImplementedError
+
+        image_gen = CategoricalImageGenerator(channel, n_filters_gen, video_length, dim_zc, dim_zm, num_labels)
+        image_dis = CategoricalImageDiscriminator(channel, n_filters_gen, use_noise, noise_sigma)
+        video_dis = CategoricalVideoDiscriminator(channel, n_filters_gen, num_labels, use_noise, noise_sigma)
     else:
-        image_gen = ImageGenerator(channel, T=video_length, dim_zc = dim_zc, dim_zm = dim_zm)
-        image_dis = ImageDiscriminator(channel, use_noise=False)
-        video_dis = VideoDiscriminator(channel, use_noise=False)
+        image_gen = ImageGenerator(channel, n_filters_gen, T=video_length, dim_zc = dim_zc, dim_zm = dim_zm)
+        image_dis = ImageDiscriminator(channel, n_filters_gen, use_noise, noise_sigma)
+        video_dis = VideoDiscriminator(channel, n_filters_gen, use_noise, noise_sigma)
 
     if args.gpu >= 0:
         chainer.cuda.get_device_from_id(args.gpu).use()
