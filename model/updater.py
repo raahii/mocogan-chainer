@@ -248,7 +248,7 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
         loss += F.sum(F.softplus(-y_fake_v[:,0])) / batchsize
 
         # categorical criterion
-        loss += F.softmax_cross_entropy(y_fake_v[:, 1:, 0, 0, 0], t_fake_v)
+        loss += F.softmax_cross_entropy(y_fake_v[:, 1:, 0, 0, 0], t_fake_v) / batchsize
         
         chainer.report({'loss': loss}, gen)
         if self.is_new_epoch:

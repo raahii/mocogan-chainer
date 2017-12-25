@@ -34,7 +34,7 @@ class ImageGenerator(chainer.Chain):
             w = chainer.initializers.GlorotNormal()
             
             # Rm
-            self.g0 = L.StatelessGRU(self.dim_zm, self.dim_zm, 0.2)
+            self.g0 = L.StatelessGRU(self.dim_zm, self.dim_zm)
             
             # G
             self.dc1 = L.DeconvolutionND(2, n_hidden,   ndf*8, 4, stride=1, pad=0, initialW=w)
@@ -209,17 +209,24 @@ class CategoricalImageGenerator(chainer.Chain):
         with self.init_scope():
             n_hidden = self.n_hidden
 
-            w = chainer.initializers.GlorotNormal()
+            # w = chainer.initializers.GlorotNormal()
             
             # Rm
-            self.g0 = L.StatelessGRU(self.dim_zm, self.dim_zm, 0.2)
+            self.g0 = L.StatelessGRU(self.dim_zm, self.dim_zm)
             
             # G
-            self.dc1 = L.Deconvolution2D(   n_hidden,  n_filters*8, 4, stride=1, pad=0, initialW=w)
-            self.dc2 = L.Deconvolution2D(n_filters*8,  n_filters*4, 4, stride=2, pad=1, initialW=w)
-            self.dc3 = L.Deconvolution2D(n_filters*4,  n_filters*2, 4, stride=2, pad=1, initialW=w)
-            self.dc4 = L.Deconvolution2D(n_filters*2,    n_filters, 4, stride=2, pad=1, initialW=w)
-            self.dc5 = L.Deconvolution2D(  n_filters, out_channels, 4, stride=2, pad=1, initialW=w)
+            k = 4
+
+            w = chainer.initializers.Uniform(1./(n_hidden*k**2))
+            self.dc1 = L.Deconvolution2D(   n_hidden,  n_filters*8, k, stride=1, pad=0, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*8*k**2))
+            self.dc2 = L.Deconvolution2D(n_filters*8,  n_filters*4, k, stride=2, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*4*k**2))
+            self.dc3 = L.Deconvolution2D(n_filters*4,  n_filters*2, k, stride=2, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*2*k**2))
+            self.dc4 = L.Deconvolution2D(n_filters*2,    n_filters, k, stride=2, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*k**2))
+            self.dc5 = L.Deconvolution2D(  n_filters, out_channels, k, stride=2, pad=1, nobias=True, initialW=w)
 
             self.bn1 = L.BatchNormalization(n_filters*8)
             self.bn2 = L.BatchNormalization(n_filters*4)
@@ -272,18 +279,24 @@ class CategoricalImageDiscriminator(chainer.Chain):
         self.noise_sigma = noise_sigma
 
         with self.init_scope():
-            w = chainer.initializers.GlorotNormal()
+            k = 4
 
-            self.dc1 = L.Convolution2D(in_channels,    n_filters, 4, stride=2, pad=1, initialW=w)
-            self.dc2 = L.Convolution2D(  n_filters,  n_filters*2, 4, stride=2, pad=1, initialW=w)
-            self.dc3 = L.Convolution2D(n_filters*2,  n_filters*4, 4, stride=2, pad=1, initialW=w)
-            self.dc4 = L.Convolution2D(n_filters*4,            1, 4, stride=2, pad=1, initialW=w)
-            # self.dc4 = L.Convolution2D(n_filters*4,  n_filters*8, 4, stride=2, pad=1, initialW=w)
-            # self.dc5 = L.Convolution2D(n_filters*8, out_channels, 4, stride=1, pad=0, initialW=w)
+            w = chainer.initializers.Uniform(1./(in_channels*k**2))
+            self.dc1 = L.Convolution2D(in_channels,    n_filters, k, stride=2, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*k**2))
+            self.dc2 = L.Convolution2D(  n_filters,  n_filters*2, k, stride=2, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*2*k**2))
+            self.dc3 = L.Convolution2D(n_filters*2,  n_filters*4, k, stride=2, pad=1, nobias=True, initialW=w)
+            # w = chainer.initializers.Uniform(1./(n_filters*4*k**2))
+            # self.dc4 = L.Convolution2D(n_filters*4,            1, k, stride=2, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*4*k**2))
+            self.dc4 = L.Convolution2D(n_filters*4,  n_filters*8, 4, stride=2, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*8*k**2))
+            self.dc5 = L.Convolution2D(n_filters*8, out_channels, 4, stride=1, pad=0, nobias=True, initialW=w)
 
             self.bn2 = L.BatchNormalization(n_filters*2)
             self.bn3 = L.BatchNormalization(n_filters*4)
-            # self.bn4 = L.BatchNormalization(n_filters*8)
+            self.bn4 = L.BatchNormalization(n_filters*8)
 
 class CategoricalVideoDiscriminator(chainer.Chain):
     def __init__(self, in_channels=3, out_channels=1, n_filters=64, \
@@ -295,13 +308,18 @@ class CategoricalVideoDiscriminator(chainer.Chain):
         self.noise_sigma = noise_sigma
 
         with self.init_scope():
-            w = chainer.initializers.GlorotNormal()
+            k = 4
 
-            self.dc1 = L.ConvolutionND(3, in_channels,    n_filters, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc2 = L.ConvolutionND(3,   n_filters,  n_filters*2, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc3 = L.ConvolutionND(3, n_filters*2,  n_filters*4, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc4 = L.ConvolutionND(3, n_filters*4,  n_filters*8, 4, stride=(1,2,2), pad=(0,1,1), initialW=w)
-            self.dc5 = L.ConvolutionND(3, n_filters*8, out_channels, 4, stride=(1,1,1), pad=(0,0,0), initialW=w)
+            w = chainer.initializers.Uniform(1./(in_channels*k**3))
+            self.dc1 = L.ConvolutionND(3, in_channels,    n_filters, k, stride=(1,2,2), pad=(0,1,1), nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*k**3))
+            self.dc2 = L.ConvolutionND(3,   n_filters,  n_filters*2, k, stride=(1,2,2), pad=(0,1,1), nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*2*k**3))
+            self.dc3 = L.ConvolutionND(3, n_filters*2,  n_filters*4, k, stride=(1,2,2), pad=(0,1,1), nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*4*k**3))
+            self.dc4 = L.ConvolutionND(3, n_filters*4,  n_filters*8, k, stride=(1,2,2), pad=(0,1,1), nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*8*k**3))
+            self.dc5 = L.ConvolutionND(3, n_filters*8, out_channels, k, stride=(1,1,1), pad=(0,0,0), nobias=True, initialW=w)
 
             self.bn2 = L.BatchNormalization(n_filters*2)
             self.bn3 = L.BatchNormalization(n_filters*4)
@@ -486,17 +504,17 @@ class InfoImageDiscriminator(CategoricalImageDiscriminator):
         with name_scope('idis_dc3', self.dc3.params()):
             y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
 
-        y = add_noise(y, self.use_noise, self.noise_sigma)
-        with name_scope('idis_dc4', self.dc4.params()):
-            y = self.dc4(y)
-
         # y = add_noise(y, self.use_noise, self.noise_sigma)
         # with name_scope('idis_dc4', self.dc4.params()):
-        #     y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
-        #
-        # y = add_noise(y, self.use_noise, self.noise_sigma)
-        # with name_scope('idis_dc5', self.dc5.params()):
-        #     y = self.dc5(y)
+        #     y = self.dc4(y)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        with name_scope('idis_dc4', self.dc4.params()):
+            y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
+
+        y = add_noise(y, self.use_noise, self.noise_sigma)
+        with name_scope('idis_dc5', self.dc5.params()):
+            y = self.dc5(y)
 
         return y
 

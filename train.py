@@ -122,9 +122,9 @@ def main():
         image_dis.to_gpu()
         video_dis.to_gpu()
 
-    opt_image_gen = make_optimizer(image_gen, 5e-5, 0.5)
-    opt_image_dis = make_optimizer(image_dis, 5e-5, 0.5)
-    opt_video_dis = make_optimizer(video_dis, 5e-5, 0.5)
+    opt_image_gen = make_optimizer(image_gen, 2e-4, 5e-5, 0.999)
+    opt_image_dis = make_optimizer(image_dis, 2e-4, 5e-5, 0.999)
+    opt_video_dis = make_optimizer(video_dis, 2e-4, 5e-5, 0.999)
 
     # init tensorboard writer
     writer = SummaryWriter(os.path.join('runs', save_dirname))
