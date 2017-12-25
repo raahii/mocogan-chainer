@@ -376,8 +376,7 @@ class ConditionalImageDiscriminator(CategoricalImageDiscriminator):
         y = F.leaky_relu(self.bn3(self.dc3(y)), slope=0.2)
 
         y = add_noise(y, self.use_noise, self.noise_sigma)
-        with name_scope('idis_dc4', self.dc4.params()):
-            y = self.dc4(y)
+        y = self.dc4(y)
 
         # y = add_noise(y, self.use_noise, self.noise_sigma)
         # with name_scope('idis_dc4', self.dc4.params()):
@@ -412,7 +411,6 @@ class ConditionalVideoDiscriminator(CategoricalVideoDiscriminator):
         y = add_noise(y, self.use_noise, self.noise_sigma)
         y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
 
-        y = add_noise(y, self.use_noise, self.noise_sigma)
         y = self.dc5(y)
 
         return y
@@ -529,7 +527,6 @@ class InfoVideoDiscriminator(CategoricalVideoDiscriminator):
         with name_scope('vdis_dc4', self.dc4.params()):
             y = F.leaky_relu(self.bn4(self.dc4(y)), slope=0.2)
 
-        y = add_noise(y, self.use_noise, self.noise_sigma)
         with name_scope('vdis_dc5', self.dc5.params()):
             y = self.dc5(y)
 

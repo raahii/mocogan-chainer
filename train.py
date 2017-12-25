@@ -24,9 +24,18 @@ from model.net import InfoImageGenerator
 from model.net import InfoImageDiscriminator
 from model.net import InfoVideoDiscriminator
 from model.updater import InfoGANUpdater
+# conditional wgan
+from model.net import ConditionalImageGenerator
+from model.net import ConditionalImageDiscriminator
+from model.net import ConditionalVideoDiscriminator
+from model.updater import WGANSVCUpdater
 
 from visualize import log_tensorboard
 from tb_chainer import utils, SummaryWriter
+
+def  include(array, element):
+    """ method like array.include? in Ruby """
+    return any(element == v for v in array)
 
 def main():
     parser = argparse.ArgumentParser(description='Train script')
@@ -60,31 +69,13 @@ def main():
     n_filters_idis = 64
     n_filters_vdis = 64
 
-    use_noise = True
+    use_noise = False
     noise_sigma = 0.1
 
     # Set up dataset
     train_dataset = MugDataset(args.dataset, video_length)
     # train_dataset = MovingMnistDataset(args.dataset, T)
     train_iter = chainer.iterators.SerialIterator(train_dataset, args.batchsize)
-
-    # print('*** updater_svc ***')
-    print('*** updater ***')
-    print('GPU: {}'.format(args.gpu))
-    print('# minibatch size: {}'.format(args.batchsize))
-    print('# max epoch: {}'.format(args.max_epoch))
-    print('# num batches: {}'.format(len(train_dataset) // args.batchsize))
-    print('# data size: {}'.format(len(train_dataset)))
-    print('# data shape: {}'.format(train_dataset[0][0].shape))
-    print('# num filters gen: {}'.format(n_filters_gen))
-    print('# num filters idis: {}'.format(n_filters_idis))
-    print('# num filters vdis: {}'.format(n_filters_vdis))
-    print('# use noise: {}'.format(use_noise))
-    print('# use label: {}'.format(args.use_label))
-    print('# categorical model: {}'.format(args.categorical_model))
-    print('\nTraining configuration is above. Start training? [enter]')
-    sys.stdin.read(1)
-    print('')
 
     # logging configurations
     if args.save_dirname is None:
@@ -103,7 +94,7 @@ def main():
 
     # Set up models
     if args.use_label:
-        if args.categorical_model == "cGAN":
+        if include(["cGAN", "cWGAN"], args.categorical_model):
             image_gen = ConditionalImageGenerator(channel, n_filters_gen, \
                                                   video_length, dim_zc, dim_zm, num_labels)
             image_dis = ConditionalImageDiscriminator(channel, 1, n_filters_idis, \
@@ -168,6 +159,20 @@ def main():
                     'video_dis': opt_video_dis,
                 },
                 device=args.gpu)
+        elif args.categorical_model == "cWGAN":
+            updater = WGANSVCUpdater(
+                models=(image_gen, image_dis, video_dis),
+                video_length=video_length,
+                img_size=size,
+                channel=channel,
+                iterator=train_iter,
+                tensorboard_writer=writer,
+                optimizer={
+                    'image_gen': opt_image_gen,
+                    'image_dis': opt_image_dis,
+                    'video_dis': opt_video_dis,
+                },
+                device=args.gpu)
         else:
             raise NotImplementedError
     else:
@@ -212,6 +217,29 @@ def main():
     if args.resume:
         chainer.serializers.load_npz(args.resume, trainer)
     
+    print('GPU: {}'.format(args.gpu))
+    print('# minibatch size: {}'.format(args.batchsize))
+    print('# max epoch: {}'.format(args.max_epoch))
+    print('# num batches: {}'.format(len(train_dataset) // args.batchsize))
+    print('# data size: {}'.format(len(train_dataset)))
+    print('# data shape: {}'.format(train_dataset[0][0].shape))
+    print('# snapshot interval: {}'.format(args.snapshot_interval))
+    print('# generate samples interval: {}'.format(args.gen_samples_interval))
+    print('# num generate samples: {}'.format(args.gen_samples_num))
+    print('# num filters gen: {}'.format(n_filters_gen))
+    print('# num filters idis: {}'.format(n_filters_idis))
+    print('# num filters vdis: {}'.format(n_filters_vdis))
+    print('# use noise: {}'.format(use_noise))
+    print('# use label: {}'.format(args.use_label))
+    print('# gen model: {}'.format(image_gen.__class__.__name__))
+    print('# idis model: {}'.format(image_dis.__class__.__name__))
+    print('# vdis model: {}'.format(video_dis.__class__.__name__))
+    print('# updater: {}'.format(updater.__class__.__name__))
+    print('\nTraining configuration is above. Start training? [enter]')
+    sys.stdin.read(1)
+    print('')
+    
+    # start training
     trainer.run()
 
     if args.gpu >= 0:
