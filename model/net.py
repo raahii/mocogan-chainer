@@ -15,6 +15,25 @@ def add_noise(x, use_noise, sigma):
     else:
         return x
 
+class pixel_shuffler():
+    def __init__(self, r):
+        self.r = r
+
+    def __call__(self, x):
+        r = self.r
+        batchsize = x.shape[0]
+        in_channels = x.shape[1]
+        out_channels = in_channels // (r ** 2)
+        in_height = x.shape[2]
+        in_width = x.shape[3]
+        out_height = in_height * r
+        out_width = in_width * r
+        x = F.reshape(x, (batchsize, r, r, out_channels, in_height, in_width))
+        x = F.transpose(x, (0, 3, 4, 1, 5, 2))
+        x = F.reshape(x, (batchsize, out_channels, out_height, out_width))
+
+        return x
+
 # Normal model set
 #{{{
 class ImageGenerator(chainer.Chain):
@@ -440,7 +459,7 @@ class InfoImageGenerator(CategoricalImageGenerator):
     def __init__(self, *args, **kwargs):
         super(InfoImageGenerator, self).__init__(*args, **kwargs)
 
-    @within_name_scope('conditional_igen')
+    @within_name_scope('info_igen')
     def __call__(self, h0, zc=None, labels=None):
         """
         input h0 shape:  (batchsize, dim_zm)
@@ -486,7 +505,7 @@ class InfoImageDiscriminator(CategoricalImageDiscriminator):
     def __init__(self, *args, **kwargs):
         super(InfoImageDiscriminator, self).__init__(*args, **kwargs)
 
-    @within_name_scope('conditional_idis')
+    @within_name_scope('info_idis')
     def __call__(self, x):
         """
         input shape:  (batchsize, 3, 64, 64)
@@ -522,7 +541,7 @@ class InfoVideoDiscriminator(CategoricalVideoDiscriminator):
     def __init__(self, *args, **kwargs):
         super(InfoVideoDiscriminator, self).__init__(*args, **kwargs)
 
-    @within_name_scope('conditional_vdis')
+    @within_name_scope('info_vdis')
     def __call__(self, x):
         """
         input shape:  (batchsize, ch, video_length, y, x)
@@ -549,7 +568,125 @@ class InfoVideoDiscriminator(CategoricalVideoDiscriminator):
             y = self.dc5(y)
 
         return y
+
+class PSInfoImageGenerator(CategoricalImageGenerator):
+    def __init__(self, out_channels=3, n_filters=64, \
+                 video_len=16, dim_zc=50, dim_zm=10, dim_zl=6):
+        super(CategoricalImageGenerator, self).__init__()
+        
+        self.out_ch = out_channels
+        self.video_len = video_len
+        self.dim_zc = dim_zc
+        self.dim_zm = dim_zm
+        self.dim_zl = dim_zl
+        self.n_hidden = dim_zc + dim_zm + dim_zl
+
+        with self.init_scope():
+            n_hidden = self.n_hidden
+
+            # w = chainer.initializers.GlorotNormal()
+            
+            # Rm
+            self.g0 = L.StatelessGRU(self.dim_zm, self.dim_zm)
+            
+            # G
+            k = 3 # kernel size of convolution layers
+            sk = 1 # kernel size of sub convolution layers
+            r = 2 # expantion rate of feature map
+
+            w = chainer.initializers.Uniform(1./(n_hidden*k**2))
+            self.cn1 = L.Convolution2D(n_hidden,  n_filters*4, k, stride=1, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*4*sk**2))
+            self.scn1 = L.Convolution2D(n_filters*4,  n_filters*4*r**2, sk, stride=1, pad=0, nobias=True, initialW=w)
+            self.ps1 = pixel_shuffler(r)
+
+            w = chainer.initializers.Uniform(1./(n_filters*4*k**2))
+            self.cn2 = L.Convolution2D(n_filters*4,  n_filters*4, k, stride=1, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*4*sk**2))
+            self.scn2 = L.Convolution2D(n_filters*4,  n_filters*4*r**2, sk, stride=1, pad=0, nobias=True, initialW=w)
+            self.ps2 = pixel_shuffler(r)
+            
+            w = chainer.initializers.Uniform(1./(n_filters*4*k**2))
+            self.cn3 = L.Convolution2D(n_filters*4,  n_filters*2, k, stride=1, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*2*sk**2))
+            self.scn3 = L.Convolution2D(n_filters*2,  n_filters*2*r**2, sk, stride=1, pad=0, nobias=True, initialW=w)
+            self.ps3 = pixel_shuffler(r)
+
+            w = chainer.initializers.Uniform(1./(n_filters*2*k**2))
+            self.cn4 = L.Convolution2D(n_filters*2,  n_filters*2, k, stride=1, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*2*sk**2))
+            self.scn4 = L.Convolution2D(n_filters*2,  n_filters*2*r**2, sk, stride=1, pad=0, nobias=True, initialW=w)
+            self.ps4 = pixel_shuffler(r)
+
+            w = chainer.initializers.Uniform(1./(n_filters*2*k**2))
+            self.cn5 = L.Convolution2D(n_filters*2,  n_filters, k, stride=1, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(n_filters*sk**2))
+            self.scn5 = L.Convolution2D(n_filters,  n_filters*r**2, sk, stride=1, pad=0, nobias=True, initialW=w)
+            self.ps5 = pixel_shuffler(r)
+
+            w = chainer.initializers.Uniform(1./(n_filters*k**2))
+            self.cn6 = L.Convolution2D(n_filters,  out_channels, k, stride=1, pad=1, nobias=True, initialW=w)
+            w = chainer.initializers.Uniform(1./(out_channels*sk**2))
+            self.scn6 = L.Convolution2D(out_channels, out_channels*r**2, sk, stride=1, pad=0, nobias=True, initialW=w)
+            self.ps6 = pixel_shuffler(r)
+
+            self.bn1 = L.BatchNormalization(n_filters*4)
+            self.bn2 = L.BatchNormalization(n_filters*4)
+            self.bn3 = L.BatchNormalization(n_filters*2)
+            self.bn4 = L.BatchNormalization(n_filters*2)
+            self.bn5 = L.BatchNormalization(  n_filters)
+
+    @within_name_scope('ps_info_igen')
+    def __call__(self, h0, zc=None, labels=None):
+        """
+        input h0 shape:  (batchsize, dim_zm)
+        input zc shape:  (batchsize, dim_zc)
+        output shape: (video_length, batchsize, channel, x, y, z)
+        """
+        batchsize = h0.shape[0]
+        xp = chainer.cuda.get_array_module(h0)
+        
+        # make [zc, zm, zl]
+        # z shape: (video_length, batchsize, channel)
+    
+        ## z_content
+        if zc is None:
+            zc = Variable(xp.asarray(self.make_zc(batchsize)))
+
+        ## z_motion
+        zm = self.make_zm(h0, batchsize)
+
+        ## z_label
+        zl, labels = self.make_zl(batchsize, labels)
+        zl = Variable(xp.asarray(zl))
+
+        z = F.concat((zc, zm, zl), axis=2)
+        z = F.reshape(z, (self.video_len*batchsize, self.n_hidden, 1, 1))
+
+        # G([zc, zm, zl])
+        x = self.ps1(self.scn1(self.cn1(z)))
+        x = F.relu(self.bn1(x))
+
+        x = self.ps2(self.scn2(self.cn2(x)))
+        x = F.relu(self.bn2(x))
+
+        x = self.ps3(self.scn3(self.cn3(x)))
+        x = F.relu(self.bn3(x))
+
+        x = self.ps4(self.scn4(self.cn4(x)))
+        x = F.relu(self.bn4(x))
+
+        x = self.ps5(self.scn5(self.cn5(x)))
+        x = F.relu(self.bn5(x))
+
+        x = self.ps6(self.scn6(self.cn6(x)))
+        x = F.tanh(x)
+
+        x = F.reshape(x, (self.video_len, batchsize, self.out_ch, 64, 64))
+
+        return x, labels
 #}}}
+
 
 if __name__ ==  "__main__":
     main()

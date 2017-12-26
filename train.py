@@ -8,7 +8,6 @@ from chainer import training
 from chainer.training import extensions
 
 from datasets import MugDataset, MovingMnistDataset
-from model.loss import binary_cross_entropy
 
 # normal gan
 from model.net import ImageGenerator
@@ -22,6 +21,7 @@ from model.net import ConditionalVideoDiscriminator
 from model.updater import ConditionalGANUpdater
 # infogan
 from model.net import InfoImageGenerator
+from model.net import PSInfoImageGenerator
 from model.net import InfoImageDiscriminator
 from model.net import InfoVideoDiscriminator
 from model.updater import InfoGANUpdater
@@ -95,15 +95,22 @@ def main():
 
     # Set up models
     if args.use_label:
-        if include(["cGAN", "cWGAN"], args.categorical_model):
+        if include(["cgan", "cwgan"], args.categorical_model):
             image_gen = ConditionalImageGenerator(channel, n_filters_gen, \
                                                   video_length, dim_zc, dim_zm, num_labels)
             image_dis = ConditionalImageDiscriminator(channel, 1, n_filters_idis, \
                                                       use_noise, noise_sigma)
             video_dis = ConditionalVideoDiscriminator(channel+num_labels, 1, n_filters_vdis, \
                                                       use_noise, noise_sigma)
-        elif args.categorical_model == "infoGAN":
+        elif args.categorical_model == "infogan":
             image_gen = InfoImageGenerator(channel, n_filters_gen, \
+                                           video_length, dim_zc, dim_zm, num_labels)
+            image_dis = InfoImageDiscriminator(channel, 1, n_filters_idis, \
+                                               use_noise, noise_sigma)
+            video_dis = InfoVideoDiscriminator(channel, num_labels+1, n_filters_vdis, \
+                                                      use_noise, noise_sigma)
+        elif args.categorical_model == "ps_infogan":
+            image_gen = PSInfoImageGenerator(channel, n_filters_gen, \
                                            video_length, dim_zc, dim_zm, num_labels)
             image_dis = InfoImageDiscriminator(channel, 1, n_filters_idis, \
                                                use_noise, noise_sigma)
@@ -146,7 +153,7 @@ def main():
                     'video_dis': opt_video_dis,
                 },
                 device=args.gpu)
-        elif args.categorical_model == "infoGAN":
+        elif include(["infogan", "ps_infogan"], args.categorical_model):
             updater = InfoGANUpdater(
                 models=(image_gen, image_dis, video_dis),
                 video_length=video_length,
@@ -218,7 +225,7 @@ def main():
     if args.resume:
         chainer.serializers.load_npz(args.resume, trainer)
     
-    print('GPU: {}'.format(args.gpu))
+    print('# gpu: {}'.format(args.gpu))
     print('# minibatch size: {}'.format(args.batchsize))
     print('# max epoch: {}'.format(args.max_epoch))
     print('# num batches: {}'.format(len(train_dataset) // args.batchsize))
@@ -230,7 +237,7 @@ def main():
     print('# num filters gen: {}'.format(n_filters_gen))
     print('# num filters idis: {}'.format(n_filters_idis))
     print('# num filters vdis: {}'.format(n_filters_vdis))
-    print('# use noise: {}'.format(use_noise))
+    print('# use noise: {}(sigma={})'.format(use_noise, noise_sigma))
     print('# use label: {}'.format(args.use_label))
     print('# gen model: {}'.format(image_gen.__class__.__name__))
     print('# idis model: {}'.format(image_dis.__class__.__name__))
