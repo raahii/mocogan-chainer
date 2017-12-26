@@ -5,6 +5,7 @@ from chainer.dataset import concat_examples
 from scipy import linalg
 import numpy as np
 import re
+from model.loss import binary_cross_entropy
 
 def total_size(obj, verbose=False):
     import sys
@@ -209,8 +210,11 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
         loss += F.sum(F.softplus(y_fake[:,0])) / batchsize
 
         # categorical criterion
-        loss += F.softmax_cross_entropy(y_real[:, 1:, 0, 0, 0], t_real)
-        loss += F.softmax_cross_entropy(y_fake[:, 1:, 0, 0, 0], t_fake)
+        # loss += F.softmax_cross_entropy(y_real[:, 1:, 0, 0, 0], t_real)
+        # loss += F.softmax_cross_entropy(y_fake[:, 1:, 0, 0, 0], t_fake)
+
+        loss += binary_cross_entropy(F.sigmoid(y_real[:, 1:, 0, 0, 0]), t_real)
+        loss += binary_cross_entropy(F.sigmoid(y_fake[:, 1:, 0, 0, 0]), t_fake)
 
         chainer.report({'loss': loss}, dis)
         if self.is_new_epoch:
@@ -248,7 +252,8 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
         loss += F.sum(F.softplus(-y_fake_v[:,0])) / batchsize
 
         # categorical criterion
-        loss += F.softmax_cross_entropy(y_fake_v[:, 1:, 0, 0, 0], t_fake_v) / batchsize
+        # loss += F.softmax_cross_entropy(y_fake_v[:, 1:, 0, 0, 0], t_fake_v)
+        loss += binary_cross_entropy(F.sigmoid(y_fake_v[:, 1:, 0, 0, 0]), t_fake_v)
         
         chainer.report({'loss': loss}, gen)
         if self.is_new_epoch:
@@ -288,6 +293,8 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
         y_fake_v = video_dis(x_fake[:,0:self.channel])
         
         ## update
+        t_real = xp.eye(6)[t_real].astype(np.float32)
+        t_fake = xp.eye(6)[t_fake].astype(np.float32)
         image_dis_optimizer.update(self.loss_idis, image_dis, y_fake_i, y_real_i)
         video_dis_optimizer.update(self.loss_vdis, video_dis, y_fake_v, t_fake, y_real_v, t_fake)
         image_gen_optimizer.update(self.loss_gen,  image_gen, y_fake_i, y_fake_v, t_fake)

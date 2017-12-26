@@ -11,7 +11,7 @@ from tb_chainer import name_scope, within_name_scope
 def add_noise(x, use_noise, sigma):
     xp = chainer.cuda.get_array_module(x.data)
     if chainer.config.train and use_noise:
-        return x + sigma * xp.random.randn(*x.shape)
+        return x + sigma * xp.random.randn(*x.data.shape)
     else:
         return x
 

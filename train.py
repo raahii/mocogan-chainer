@@ -8,6 +8,7 @@ from chainer import training
 from chainer.training import extensions
 
 from datasets import MugDataset, MovingMnistDataset
+from model.loss import binary_cross_entropy
 
 # normal gan
 from model.net import ImageGenerator
@@ -69,8 +70,8 @@ def main():
     n_filters_idis = 64
     n_filters_vdis = 64
 
-    use_noise = False
-    noise_sigma = 0.1
+    use_noise = True
+    noise_sigma = 0.08
 
     # Set up dataset
     train_dataset = MugDataset(args.dataset, video_length)
