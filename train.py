@@ -71,7 +71,7 @@ def main():
     n_filters_vdis = 64
 
     use_noise = True
-    noise_sigma = 0.08
+    noise_sigma = 0.1
 
     # Set up dataset
     train_dataset = MugDataset(args.dataset, video_length)
@@ -139,7 +139,7 @@ def main():
 
     # Setup updater
     if args.use_label:
-        if args.categorical_model == "cGAN":
+        if args.categorical_model == "cgan":
             updater = ConditionalGANUpdater(
                 models=(image_gen, image_dis, video_dis),
                 video_length=video_length,
@@ -167,7 +167,7 @@ def main():
                     'video_dis': opt_video_dis,
                 },
                 device=args.gpu)
-        elif args.categorical_model == "cWGAN":
+        elif args.categorical_model == "cwgan":
             updater = WGANSVCUpdater(
                 models=(image_gen, image_dis, video_dis),
                 video_length=video_length,

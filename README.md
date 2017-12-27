@@ -6,43 +6,33 @@
 
 ## Chainer implementation of MoCoGAN
 
-This repository contains an chainer implementation of MoCoGAN.
+This repository contains an Chainer implementation of MoCoGAN.
 
 Paper: [MoCoGAN: Decomposing Motion and Content for Video Generation by Sergey Tulyakov, Ming-Yu Liu, Xiaodong Yang, Jan Kautz](https://arxiv.org/abs/1707.04993).
 
+## Summary
+
+The model can generate various videos. I used [MUG Facial Expression Database](https://mug.ee.auth.gr/fed/) to train the model. The dataset consisted of 86 subjects(51 male and 34 female) performing various facial expressins. Each video conststed of 50 to 160 frames.
+
+In my experiment, the dataset converted to short video clips like shape of`(video_len, channel, height, width) = (16, 3, 64, 64)`. 
+
+Model architecture of MoCoGAN is shown below.
+<img src="doc/mocogan-model.png" style="max-width:650px;">
+
+
 ### Result
 
-preparing...
+Generated samples (1000 epoch)
 
 ### Requirements
 
-- Python 3.6
+- python3
 - chainer
-- opencv
 - pillow
+- opencv
+- tensorboard-chainer
+- tqdm
 
-### Dataset
+`pip install -r requirements.txt`
 
-I trained the model using **[MUG Facial Expression Database](https://mug.ee.auth.gr/fed/)**. 
-
-### Usage
-
-#### Preparing Dataset
-
-Firstly, yownload dataset from [MUG Facial Expression Database](https://mug.ee.auth.gr/fed/), and then perform preprocessing:
-
-```
-python preprocess.py <downloaded datset path> <save path>
-```
-
-#### Training
-
-```
-python train.py --dataset <save path> --batchsize <batchsize>
-```
-
-#### Generation
-
-```
-python generate_samples.py -m <model_file> -d <save_dir> -n <num samples>
-```
+### Getting started
