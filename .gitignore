@@ -8,7 +8,6 @@ result/*
 !result/trained_models/
 runs
 test
+scripts
 
 deploy.sh
-model/updater_svc.py
-
