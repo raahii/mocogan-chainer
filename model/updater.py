@@ -33,7 +33,7 @@ class NormalUpdater(chainer.training.StandardUpdater):
     # {{{
     def __init__(self, *args, **kwargs):
         self.image_gen, self.image_dis, self.video_dis = kwargs.pop('models')
-        self.video_legnth = kwargs.pop('video_length')
+        self.video_length = kwargs.pop('video_length')
         self.img_size = kwargs.pop('img_size')
         self.channel  = kwargs.pop('channel')
         self.tf_writer = kwargs.pop('tensorboard_writer')
@@ -91,18 +91,17 @@ class NormalUpdater(chainer.training.StandardUpdater):
         batch = self.get_iterator('main').next()
         batchsize = len(batch)
         x_real, t_real = concat_examples(batch)
-        x_real = x_real[:, :self.channel]
         x_real = Variable(self.converter(x_real, self.device))
         xp = chainer.cuda.get_array_module(x_real.data)
-        y_real_i = image_dis(x_real[:,:,xp.random.randint(0, self.video_legnth)])
+        y_real_i = image_dis(x_real[:,:,xp.random.randint(0, self.video_length)])
         y_real_v = video_dis(x_real)
 
         ## fake data
         h0 = Variable(xp.asarray(image_gen.make_h0(batchsize)))
-        x_fake = image_gen(h0)
+        x_fake, _ = image_gen(h0)
         # (t, bs, c, y, x) -> (bs, c, t, y, x)
         x_fake = x_fake.transpose(1, 2, 0, 3, 4)
-        y_fake_i = image_dis(x_fake[:,:,xp.random.randint(0, self.video_legnth)])
+        y_fake_i = image_dis(x_fake[:,:,xp.random.randint(0, self.video_length)])
         y_fake_v = video_dis(x_fake)
         
         ## update
@@ -115,36 +114,24 @@ class ConditionalGANUpdater(chainer.training.StandardUpdater):
     # {{{
     def __init__(self, *args, **kwargs):
         self.image_gen, self.image_dis, self.video_dis = kwargs.pop('models')
-        self.video_legnth = kwargs.pop('video_length')
+        self.video_length = kwargs.pop('video_length')
         self.img_size = kwargs.pop('img_size')
         self.channel  = kwargs.pop('channel')
+        self.dim_zl  = kwargs.pop('dim_zl')
         self.tf_writer = kwargs.pop('tensorboard_writer')
+
         super(ConditionalGANUpdater, self).__init__(*args, **kwargs)
     
-    def loss_vdis(self, dis, y_fake, y_real):
-        batchsize = len(y_fake)
-
-        # gan criterion
-        loss = F.sum(F.softplus(-y_real)) / batchsize
-        loss += F.sum(F.softplus(y_fake)) / batchsize
-
-        chainer.report({'loss': loss}, dis)
-        if self.is_new_epoch:
-            self.tf_writer.add_scalar('loss:video_discriminator', loss.data, self.epoch)
-            self.tf_writer.add_graph([y_fake, y_real])
-
-        return loss
-
-    def loss_idis(self, dis, y_fake, y_real):
+    def loss_dis(self, dis, y_fake, y_real):
         batchsize = len(y_fake)
 
         loss = F.sum(F.softplus(-y_real)) / batchsize
         loss += F.sum(F.softplus(y_fake)) / batchsize
-
-        chainer.report({'loss': loss}, dis)
+        
         if self.is_new_epoch:
-            self.tf_writer.add_scalar('loss:image_discriminator', loss.data, self.epoch)
-            self.tf_writer.add_graph([y_fake, y_real])
+            chainer.report({'loss': loss}, dis)
+            self.tf_writer.add_scalar('loss:{}'.format(dis.__class__.__name__), \
+                                                loss.data, self.epoch)
 
         return loss
 
@@ -161,6 +148,19 @@ class ConditionalGANUpdater(chainer.training.StandardUpdater):
 
         return loss
 
+    def concat_label_video(self, video, label, xp):
+        """
+        Concatenate video with label
+
+        :param np.ndarray video: shape: (batchsize, channel, video_length, height, width)
+        :param class xp, numpy or cupy
+        """
+        N, C, T, H, W = video.shape
+        label_video = -1.0 * xp.ones((N, self.dim_zl, T, H, W), dtype=np.float32)
+        label_video[np.arange(N), label] = 1.
+
+        return F.concat((video, label_video), axis=1)
+
     def update_core(self):
         ## load models
         image_gen_optimizer = self.get_optimizer('image_gen')
@@ -173,23 +173,24 @@ class ConditionalGANUpdater(chainer.training.StandardUpdater):
         batch = self.get_iterator('main').next()
         batchsize = len(batch)
         x_real, t_real = concat_examples(batch)
-        x_real = x_real[:self.in_channels]
         x_real = Variable(self.converter(x_real, self.device))
         xp = chainer.cuda.get_array_module(x_real.data)
-        y_real_i = image_dis(x_real[:,xp.random.randint(0, self.video_legnth)])
+        x_real = self.concat_label_video(x_real, t_real, xp) # concat label features
+        t = xp.random.randint(0, self.video_length)
+        y_real_i = image_dis(x_real[:,:,t])
         y_real_v = video_dis(x_real)
 
         ## fake data
         h0 = Variable(xp.asarray(image_gen.make_h0(batchsize)))
         x_fake, t_fake = image_gen(h0)
-        # (t, bs, c, y, x) -> (bs, c, t, y, x)
-        x_fake = x_fake.transpose(1, 2, 0, 3, 4)
-        y_fake_i = image_dis(x_fake[:,0:self.channel,xp.random.randint(0, self.video_legnth)])
+        x_fake = x_fake.transpose(1, 2, 0, 3, 4) # (T, N, C, H, W) -> (N, C, T, H, W)
+        x_fake = self.concat_label_video(x_fake, t_fake, xp) # concat label features
+        y_fake_i = image_dis(x_fake[:,:,t])
         y_fake_v = video_dis(x_fake)
-        
+
         ## update
-        image_dis_optimizer.update(self.loss_idis, image_dis, y_fake_i, y_real_i)
-        video_dis_optimizer.update(self.loss_vdis, video_dis, y_fake_v, y_real_v)
+        image_dis_optimizer.update(self.loss_dis, image_dis, y_fake_i, y_real_i)
+        video_dis_optimizer.update(self.loss_dis, video_dis, y_fake_v, y_real_v)
         image_gen_optimizer.update(self.loss_gen, image_gen, y_fake_i, y_fake_v)
     # }}}
 
@@ -197,7 +198,7 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
     # {{{
     def __init__(self, *args, **kwargs):
         self.image_gen, self.image_dis, self.video_dis = kwargs.pop('models')
-        self.video_legnth = kwargs.pop('video_length')
+        self.video_length = kwargs.pop('video_length')
         self.img_size = kwargs.pop('img_size')
         self.channel  = kwargs.pop('channel')
         self.tf_writer = kwargs.pop('tensorboard_writer')
@@ -277,7 +278,7 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
         x_real = Variable(self.converter(x_real, self.device))
         xp = chainer.cuda.get_array_module(x_real.data)
         t_real = xp.asarray(t_real)
-        y_real_i = image_dis(x_real[:,0:self.channel,xp.random.randint(0, self.video_legnth)])
+        y_real_i = image_dis(x_real[:,0:self.channel,xp.random.randint(0, self.video_length)])
         y_real_v = video_dis(x_real[:,0:self.channel])
         
         ## fake data
@@ -286,7 +287,7 @@ class InfoGANUpdater(chainer.training.StandardUpdater):
         # (t, bs, c, y, x) -> (bs, c, t, y, x)
         x_fake   = x_fake.transpose(1, 2, 0, 3, 4)
         t_fake   = xp.asarray(t_fake)
-        y_fake_i = image_dis(x_fake[:,0:self.channel,xp.random.randint(0, self.video_legnth)])
+        y_fake_i = image_dis(x_fake[:,0:self.channel,xp.random.randint(0, self.video_length)])
         y_fake_v = video_dis(x_fake[:,0:self.channel])
         
         ## update

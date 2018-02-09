@@ -17,7 +17,7 @@ The model can generate various videos. I used [MUG Facial Expression Database](h
 In my experiment, the dataset converted to short video clips like shape of`(video_len, channel, height, width) = (16, 3, 64, 64)`. 
 
 Model architecture of MoCoGAN is shown below.
-<img src="doc/mocogan-model.png" style="max-width:650px;">
+<img src="doc/mocogan-model.png" style="max-width:650px;" width="650px">
 
 
 ### Result
@@ -26,13 +26,16 @@ Generated samples (1000 epoch)
 
 ### Requirements
 
-- python3
-- chainer
-- pillow
+Plese refer `requirements.txt` for detail. Mainly it requires following:
+- python>=3.4
+- chainer==3.1.0
 - opencv
-- tensorboard-chainer
-- tqdm
+- ffmpeg
 
-`pip install -r requirements.txt`
+```
+pip install -r requirements.txt
+```
+
+You must install `opencv` (for preprocessing only), `ffmpeg` on your system manually.
 
 ### Getting started
