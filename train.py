@@ -13,6 +13,7 @@ from chainer.training import extensions
 from model.net import ImageGenerator
 from model.net import ImageDiscriminator
 from model.net import VideoDiscriminator
+from model.updater import Updater
 
 from datasets import MugDataset, MovingMnistDataset
 
@@ -78,9 +79,9 @@ def main():
     elif args.model == "infogan":
         if num_labels == 0: raise ValueError("Called cgan model, but dataset has no label.")
         use_label = True
-        image_gen = ImageGenerator(dim_zc, dim_zm, num_labels, channel+num_labels, n_filters_gen, video_length)
-        image_dis = ImageDiscriminator(channel+num_labels, 1+num_labels, n_filters_gen, use_noise, noise_sigma)
-        video_dis = VideoDiscriminator(channel+num_labels, 1+num_labels, n_filters_gen, use_noise, noise_sigma)
+        image_gen = ImageGenerator(dim_zc, dim_zm, num_labels, channel, n_filters_gen, video_length)
+        image_dis = ImageDiscriminator(channel, 1+num_labels, n_filters_gen, use_noise, noise_sigma)
+        video_dis = VideoDiscriminator(channel, 1+num_labels, n_filters_gen, use_noise, noise_sigma)
     
     if args.gpu >= 0:
         chainer.cuda.get_device_from_id(args.gpu).use()
@@ -103,6 +104,7 @@ def main():
 
     # updater args
     updater_args = {
+        "model":              args.model,
         "models":             (image_gen, image_dis, video_dis),
         "video_length":       video_length,
         "img_size":           size,
@@ -119,15 +121,7 @@ def main():
     }
 
     # Setup updater
-    if args.model == 'normal':
-        from model.updater import NormalUpdater
-        updater = NormalUpdater(**updater_args)
-    elif args.model == 'cgan':
-        from model.updater import ConditionalGANUpdater
-        updater = ConditionalGANUpdater(**updater_args)
-    elif args.model == "infogan":
-        from model.updater import InfoGANUpdater
-        updater = InfoGANUpdater(**updater_args)
+    updater = Updater(**updater_args)
 
     # Setup logging
     save_path = Path('result') / args.save_name
