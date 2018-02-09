@@ -26,16 +26,13 @@ Generated samples (1000 epoch)
 
 ### Requirements
 
-Plese refer `requirements.txt` for detail. Mainly it requires following:
 - python>=3.4
-- chainer==3.1.0
 - opencv
 - ffmpeg
 
+Plese refer `requirements.txt` for required python packages.
 ```
 pip install -r requirements.txt
 ```
-
-You must install `opencv` (for preprocessing only), `ffmpeg` on your system manually.
 
 ### Getting started

@@ -33,7 +33,7 @@ def main():
     parser.add_argument('--display_interval', type=int, default=1, help='interval of displaying log to console')
     parser.add_argument('--snapshot_interval', type=int, default=10, help='interval of snapshot')
     parser.add_argument('--log_tensorboard_interval', type=int, default=10, help='interval of log to tensorboard')
-    parser.add_argument('--gen_samples_num', type=int, default=36, help='num generate samples')
+    parser.add_argument('--num_gen_samples', type=int, default=36, help='num generate samples')
     parser.add_argument('--dim_zc', type=int, default=50, help='number of dimensions of z content')
     parser.add_argument('--dim_zm', type=int, default=10, help='number of dimensions of z motion')
     parser.add_argument('--n_filters_gen', type=int, default=64, help='number of channelsof image generator')
@@ -126,10 +126,6 @@ def main():
     # Setup logging
     save_path = Path('result') / args.save_name
     save_path.mkdir(parents=True, exist_ok=True)
-
-    # save image_gen model
-    with open(os.path.join(save_path, "image_gen_model.pkl"), mode="wb") as f:
-        pickle.dump(image_gen, f)
     
     # trainer
     trainer = training.Trainer(updater, (args.max_epoch, 'epoch'), out=save_path)
@@ -156,8 +152,10 @@ def main():
 
     # tensorboard-chainer
     log_tensorboard_interval = (args.log_tensorboard_interval, 'epoch')
+    if np.sqrt(args.num_gen_samples) % 1.0 != 0:
+        raise ValueError('--num_gen_samples must be n^2 (n: natural number).')
     trainer.extend(
-        log_tensorboard(image_gen, args.gen_samples_num, video_length, writer),
+        log_tensorboard(image_gen, args.num_gen_samples, video_length, writer),
         trigger=log_tensorboard_interval)
 
     if args.resume:
@@ -170,10 +168,6 @@ def main():
     print('# num batches: {}'.format(len(train_dataset) // args.batchsize))
     print('# data size: {}'.format(len(train_dataset)))
     print('# data shape: {}'.format(train_dataset[0][0].shape))
-    print('# gen model: {}'.format(image_gen.__class__.__name__))
-    print('# idis model: {}'.format(image_dis.__class__.__name__))
-    print('# vdis model: {}'.format(video_dis.__class__.__name__))
-    print('# updater: {}'.format(updater.__class__.__name__))
     print('# num filters igen: {}'.format(n_filters_gen))
     print('# num filters idis: {}'.format(n_filters_idis))
     print('# num filters vdis: {}'.format(n_filters_vdis))
@@ -181,7 +175,7 @@ def main():
     print('# use label: {}'.format(use_label))
     print('# snapshot interval: {}'.format(args.snapshot_interval))
     print('# log tensorboard interval: {}'.format(args.log_tensorboard_interval))
-    print('# num generate samples: {}'.format(args.gen_samples_num))
+    print('# num generate samples: {}'.format(args.num_gen_samples))
     print('')
     
     # start training
@@ -192,9 +186,9 @@ def main():
         image_dis.to_cpu()
         video_dis.to_cpu()
 
-    chainer.serializers.save_npz(os.path.join(save_path, 'image_gen_epoch_fianl.npz'), image_gen)
-    chainer.serializers.save_npz(os.path.join(save_path, 'image_dis_epoch_fianl.npz'), image_dis)
-    chainer.serializers.save_npz(os.path.join(save_path, 'video_dis_epoch_fianl.npz'), video_dis)
+    chainer.serializers.save_npz(save_path / 'image_gen_epoch_fianl.npz', image_gen)
+    chainer.serializers.save_npz(save_path / 'image_dis_epoch_fianl.npz', image_dis)
+    chainer.serializers.save_npz(save_path / 'video_dis_epoch_fianl.npz', video_dis)
 
 if __name__ == '__main__':
     main()

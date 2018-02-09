@@ -9,5 +9,7 @@ result/*
 runs
 test
 scripts
+saved
+doc/mug_normal
 
 deploy.sh

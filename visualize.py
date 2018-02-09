@@ -1,19 +1,19 @@
-import sys, os, glob, shutil
-import re
-from multiprocessing import Process
+import sys, os
+from pathlib import Path
+import subprocess as sp
 
 import numpy as np
-from PIL import Image, GifImagePlugin
+from PIL import Image
 
 import chainer
 import chainer.cuda
 from chainer import Variable
 import chainer.functions as F
 
-import subprocess as sp
 
 def to_sequence(video, horizontally=True):
-    """Convert a video to an image with frames horizontally aligned
+    """
+    Convert a video to an image with frames horizontally aligned
 
     :param np.ndarray video: video (dim=5, axis=(num, channel, height, width))
     :param bool horizontally: whether concatenate horizontally or not (vertically)
@@ -51,27 +51,41 @@ def to_grid(videos, size):
 
     return grid_video
 
-def save_frames(video, dirname):
+def save_frames(video, save_path):
+    """
+    Save all video frames in save_path
+    
+    :param np.ndarray video: video (dim=5, axis=(video_len, batchsize, channel, height, width))
+    :param pathlib.path save_path: direcotry path to save frames
+    """
+    save_path.mkdir(parents=True, exist_ok=True)
+
     for i, v in enumerate(video):
-        filename = os.path.join(dirname, "{:02d}.jpg".format(i))
+        filename = save_path / "{:02d}.jpg".format(i)
         Image.fromarray(v).save(filename)
 
-def save_video(video, filename):
+def save_video(video, save_path, save_frame=False, frame_path=Path("/tmp/mocogan-chainer")):
+    """
+    Save video
+    :param np.ndarray voxel: video (dim=4, dtype=np.uint8, axis=(video_len, height, width, channel))
+    :param pathlib.Path save_path: path to save video
+    :param bool save_frame: whether save video frames
+    :param pathlib.Path frame_path: path to save video frames
+    """
     t, h, w, c  = video.shape
-    command = ['ffmpeg',
-               '-y',
-               '-f', 'rawvideo',
-               '-vcodec', 'rawvideo',
-               '-s', '{}x{}'.format(h,w),
-               '-pix_fmt', 'rgb24',
-               '-r', '8',
-               '-i', '-',
-               '-c:v', 'mjpeg',
-               '-q:v', '3',
-               '-an',
-               filename]
-    pipe = sp.Popen(command, stdin=sp.PIPE, stderr=sp.PIPE)
-    pipe.stdin.write(video.tostring())
+    
+    frame_path.mkdir(parents=True, exist_ok=True)
+    for i in range(t):
+        Image.fromarray(video[i])\
+             .save(frame_path / '{:02d}.jpg'.format(i))
+
+    video_frames = frame_path / '%02d.jpg'
+    cmd = 'ffmpeg -y -r 16 -i {} -vcodec libx264 -pix_fmt yuv420p -vf setpts=PTS/0.5 {}'\
+          .format(video_frames, save_path)
+    sp.call(cmd, shell=True)
+
+    if not save_frame:
+        frame_path.rmdir()
 
 def log_tensorboard(image_gen, num, video_length, writer):
     @chainer.training.make_extension()
