@@ -97,8 +97,7 @@ class Updater(chainer.training.StandardUpdater):
         y_real_v = video_dis(x_real)
 
         ## fake data
-        h0 = Variable(xp.asarray(image_gen.make_h0(batchsize)))
-        x_fake, t_fake = image_gen(h0)
+        x_fake, t_fake = image_gen(batchsize, xp)
         x_fake = x_fake.transpose(1, 2, 0, 3, 4) # (T, N, C, H, W) -> (N, C, T, H, W)
         if self.model == 'cgan':
             # concat label features

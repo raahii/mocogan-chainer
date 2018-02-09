@@ -17,7 +17,7 @@ from model.updater import Updater
 
 from datasets import MugDataset, MovingMnistDataset
 
-from visualize import log_tensorboard
+from util import log_tensorboard
 from tb_chainer import utils, SummaryWriter
 
 def main():
@@ -32,7 +32,7 @@ def main():
                                           help="save path for log, snapshot etc")
     parser.add_argument('--display_interval', type=int, default=1, help='interval of displaying log to console')
     parser.add_argument('--snapshot_interval', type=int, default=10, help='interval of snapshot')
-    parser.add_argument('--log_tensorboard_interval', type=int, default=10, help='interval of log to tensorboard')
+    parser.add_argument('--log_tensorboard_interval', type=int, default=10, help='interval of log to tensorboard (genenrate samples too)')
     parser.add_argument('--num_gen_samples', type=int, default=36, help='num generate samples')
     parser.add_argument('--dim_zc', type=int, default=50, help='number of dimensions of z content')
     parser.add_argument('--dim_zm', type=int, default=10, help='number of dimensions of z motion')

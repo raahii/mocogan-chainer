@@ -51,19 +51,16 @@ class ImageGenerator(chainer.Chain):
     def make_hidden(self, batchsize, size):
         return np.random.normal(0, 0.33, size=[batchsize, size]).astype(np.float32)
 
-    def make_h0(self, batchsize):
-        return self.make_hidden(batchsize, self.dim_zm+self.dim_zl)
-
     def to_one_hot(self, zl, xp):
         return xp.eye(self.dim_zl, dtype=np.float32)[zl]
 
-    def make_zm(self, h0, zl):
+    def make_zm(self, batchsize, zl, xp):
         """ make zm vectors """
 
-        batchsize = h0.shape[0]
-        xp = chainer.cuda.get_array_module(h0)
-
         assert self.use_label == (zl is not None)
+
+        h0 = self.make_hidden(batchsize, self.dim_zm + self.dim_zl)
+        h0 = Variable(xp.asarray(h0))
 
         ht = [h0]
         for t in range(self.video_len):
@@ -79,15 +76,13 @@ class ImageGenerator(chainer.Chain):
 
         return zm
 
-    def __call__(self, h0):
+    def __call__(self, batchsize, xp=np):
         """
         input h0 shape:  (batchsize, dim_zm)
         input zc shape:  (batchsize, dim_zc)
         output shape: (video_length, batchsize, channel, x, y)
         """
-        batchsize = h0.shape[0]
-        xp = chainer.cuda.get_array_module(h0)
-        
+
         # make zl
         if self.use_label:
             labels = xp.random.randint(self.dim_zl, size=batchsize)
@@ -97,7 +92,7 @@ class ImageGenerator(chainer.Chain):
             zl = None
 
         # make zm
-        zm = self.make_zm(h0, zl)
+        zm = self.make_zm(batchsize, zl, xp)
         
         # make zc
         zc = Variable(xp.asarray(self.make_hidden(batchsize, self.dim_zc)))

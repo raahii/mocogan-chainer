@@ -12,13 +12,7 @@ from chainer import Variable
 import chainer.functions as F
 
 from model.net import ImageGenerator
-from visualize import to_grid, save_frames, save_video
-
-def generate(image_gen, num):
-    h0 = image_gen.make_h0(num)
-    x = image_gen(h0)
-
-    return x
+from util import to_grid, save_frames, save_video
 
 def main():
     parser = argparse.ArgumentParser()
@@ -32,12 +26,15 @@ def main():
     if np.sqrt(args.num) % 1.0 != 0:
         raise ValueError('--num must be n^2 (n: natural number).')
     n = int(np.sqrt(args.num))
+
+    # gpu or cpu
+    xp = np if args.gpu == -1 else chainer.cuda.cupy
     
     gen = ImageGenerator()
     serializers.load_npz(args.model_weight, gen)
 
     print(">>> generating...")
-    videos = generate(gen, args.num) # (t, bs, c, w, h)
+    videos = gen(args.num, xp) # (t, bs, c, w, h)
     videos = videos[0].data
     videos = ((videos / 2. + 0.5) * 255).astype(np.uint8)
     
@@ -51,8 +48,8 @@ def main():
     save_video(grid_video, save_path/'grid.mp4', \
                True, save_path/'grid')
     
-    videos = videos.transpose(1, 0, 3, 4, 2)
     # save each video
+    videos = videos.transpose(1, 0, 3, 4, 2)
     for i, video in enumerate(videos):
         save_video(video, save_path/'{:03d}.mp4'.format(i),\
                    True, save_path/'{:03d}'.format(i))

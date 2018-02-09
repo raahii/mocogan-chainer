@@ -10,7 +10,6 @@ import chainer.cuda
 from chainer import Variable
 import chainer.functions as F
 
-
 def to_sequence(video, horizontally=True):
     """
     Convert a video to an image with frames horizontally aligned
@@ -92,10 +91,11 @@ def log_tensorboard(image_gen, num, video_length, writer):
     def log(trainer):
         with chainer.using_config('train', False):
             updater = trainer.updater
+
+            xp = np if updater.device == -1 else chainer.cuda.cupy
             
             # generate samples
-            h0 = Variable(updater.converter(image_gen.make_h0(num), updater.device))
-            videos, _ = image_gen(h0)
+            videos, _ = image_gen(num, xp)
             videos = chainer.cuda.to_cpu(videos.data) # (T, N, C, H, W)
             videos = videos / 2. + 0.5
             
