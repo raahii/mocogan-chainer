@@ -14,31 +14,27 @@ Paper: [MoCoGAN: Decomposing Motion and Content for Video Generation by Sergey T
 
 Generated samples (300 epoch)
 
-### MUG Facial Expression Database
+#### MUG Facial Expression Database
 
-|normal ( *not* using label )|hoge|
+|normal ( *not* using label )|infogan (during the experiment)|
 |---|---|
-|![](doc/mug/normal.gif)|![](doc/mug/normal.gif)|
-
-|cgan ( using label )|infogan ( using label )|
-|---|---|
-|![](doc/mug/normal.gif)|![](doc/mug/normal.gif)|
+|![](doc/mug/normal.gif)|![](http://via.placeholder.com/384)|
 
 ## Summary
 
-### Dataset
+#### Dataset
 MoCoGAN is one of GAN architectures for video generation. I used [MUG Facial Expression Database](https://mug.ee.auth.gr/fed/) to train the model. The dataset consisted of 86 subjects(51 male and 34 female) performing various facial expressins. Each video conststed of 50 to 160 frames.
 
 In my experiment, the dataset converted to short video clips like shape of`(video_len, channel, height, width) = (16, 3, 64, 64)`. 
 
-### Architecture
+#### Architecture
 The model architecture is shown below.
 
 |MoCoGAN Architecture|
 |---|
 |![](doc/mocogan-model.png)|
 
-### Loss Function
+#### Loss Function
 
 ## Requirements
 
@@ -53,6 +49,9 @@ pip install -r requirements.txt
 
 ## Getting started
 
+__TODO__
+
+<!--
 ### 0. Download dataset
 
 - MUG Facial Expression Database: [https://mug.ee.auth.gr/fed/](https://mug.ee.auth.gr/fed/)
@@ -91,3 +90,4 @@ tensorboard --logdir=runs
 ```
 python generate_samples.py <generater_snapshot> <save_path>
 ```
+-->

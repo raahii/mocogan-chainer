@@ -26,15 +26,19 @@ class ImageGenerator(chainer.Chain):
         self.n_filters = n_filters
         self.video_len = video_len
 
-        n_hidden = dim_zc + dim_zm + dim_zl
+        n_hidden = dim_zc + dim_zm
         self.n_hidden = n_hidden
         self.use_label = dim_zl != 0
+        self.name = self.__class__.__name__
 
         with self.init_scope():
             w = chainer.initializers.GlorotNormal()
             
             # Rm
-            self.g0 = L.StatelessGRU(self.dim_zm+self.dim_zl, self.dim_zm+self.dim_zl)
+            if self.use_label:
+                self.g0 = L.StatelessGRU(self.dim_zm+self.dim_zl, self.dim_zm)
+            else:
+                self.g0 = L.StatelessGRU(self.dim_zm, self.dim_zm)
             
             # G
             self.dc1 = L.DeconvolutionND(2,    n_hidden,  n_filters*8, 4, stride=1, pad=0, initialW=w)
@@ -59,7 +63,7 @@ class ImageGenerator(chainer.Chain):
 
         assert self.use_label == (zl is not None)
 
-        h0 = self.make_hidden(batchsize, self.dim_zm + self.dim_zl)
+        h0 = self.make_hidden(batchsize, self.dim_zm)
         h0 = Variable(xp.asarray(h0))
 
         ht = [h0]
@@ -71,7 +75,7 @@ class ImageGenerator(chainer.Chain):
 
             ht.append(self.g0(ht[-1], et))
         
-        zmt = [F.reshape(hk, (1, batchsize, self.dim_zm+self.dim_zl)) for hk in ht[1:]]
+        zmt = [F.reshape(hk, (1, batchsize, self.dim_zm)) for hk in ht[1:]]
         zm = F.concat(zmt, axis=0)
 
         return zm
@@ -121,6 +125,7 @@ class ImageDiscriminator(chainer.Chain):
         self.n_filters    = n_filters
         self.use_noise    = use_noise
         self.noise_sigma  = noise_sigma
+        self.name = self.__class__.__name__
 
         with self.init_scope():
             w = chainer.initializers.GlorotNormal()
@@ -161,6 +166,7 @@ class VideoDiscriminator(chainer.Chain):
         self.n_filters    = n_filters
         self.use_noise    = use_noise
         self.noise_sigma  = noise_sigma
+        self.name = self.__class__.__name__
 
         with self.init_scope():
             w = chainer.initializers.GlorotNormal()

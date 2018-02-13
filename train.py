@@ -6,6 +6,7 @@ import pickle
 from pytz import timezone
 from datetime import datetime
 
+import numpy as np
 import chainer
 from chainer import training
 from chainer.training import extensions

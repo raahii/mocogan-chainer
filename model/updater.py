@@ -25,7 +25,7 @@ class Updater(chainer.training.StandardUpdater):
         loss = F.sum(F.softplus(-y_real[:1])) / batchsize
         loss += F.sum(F.softplus(y_fake)[:1]) / batchsize
         
-        if self.model == 'infogan':
+        if self.model == 'infogan' and dis.name == "VideoDiscriminator":
             # eliminate shape difference
             N = y_real.shape[0]
             C = y_real.shape[1]
@@ -38,7 +38,7 @@ class Updater(chainer.training.StandardUpdater):
 
         if self.is_new_epoch:
             chainer.report({'loss': loss}, dis)
-            self.tf_writer.add_scalar('loss:{}'.format(dis.__class__.__name__), \
+            self.tf_writer.add_scalar('loss:{}'.format(dis.name), \
                                        loss.data, self.epoch)
 
         return loss
@@ -57,7 +57,7 @@ class Updater(chainer.training.StandardUpdater):
 
         if self.is_new_epoch:
             chainer.report({'loss': loss}, gen)
-            self.tf_writer.add_scalar('loss:{}'.format(gen.__class__.__name__), \
+            self.tf_writer.add_scalar('loss:{}'.format(gen.name), \
                                        loss.data, self.epoch)
 
         return loss
@@ -89,6 +89,7 @@ class Updater(chainer.training.StandardUpdater):
         x_real, t_real = concat_examples(batch)
         x_real = Variable(self.converter(x_real, self.device))
         xp = chainer.cuda.get_array_module(x_real.data)
+        t_real = Variable(xp.asarray(t_real).astype(np.int))
         if self.model == 'cgan':
             # concat label features
             x_real = self.concat_label_video(x_real, t_real, xp)
@@ -99,6 +100,7 @@ class Updater(chainer.training.StandardUpdater):
         ## fake data
         x_fake, t_fake = image_gen(batchsize, xp)
         x_fake = x_fake.transpose(1, 2, 0, 3, 4) # (T, N, C, H, W) -> (N, C, T, H, W)
+        t_fake = Variable(xp.asarray(t_fake).astype(np.int))
         if self.model == 'cgan':
             # concat label features
             x_fake = self.concat_label_video(x_fake, t_fake, xp)
